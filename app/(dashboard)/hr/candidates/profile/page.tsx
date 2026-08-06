@@ -358,12 +358,7 @@ export default function CandidateProfilePage() {
                     )}
                   </Typography>
 
-                  <Stack
-                    direction="row"
-                    spacing={1}
-                    alignItems="center"
-                    sx={{ pt: 0.5 }}
-                  >
+                  <Stack direction="row" spacing={1} sx={{ pt: 0.5 }}>
                     <Tooltip title="View resume">
                       <IconButton
                         component={Link}
@@ -626,7 +621,6 @@ export default function CandidateProfilePage() {
               setScheduleError(null);
             }}
             fullWidth
-            InputLabelProps={{ shrink: true }}
             error={Boolean(scheduleError)}
             helperText={scheduleError || scheduleModalCopy.helper}
           />
