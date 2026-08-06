@@ -179,12 +179,10 @@ export default function ChatBox({
       <Stack
         direction="row"
         spacing={1.2}
-        alignItems="center"
-        justifyContent="space-between"
         component="header"
         sx={{ p: { xs: 1.5, sm: 2 } }}
       >
-        <Stack direction="row" spacing={1.2} alignItems="center">
+        <Stack direction="row" spacing={1.2}>
           <Box
             sx={{
               width: 34,
@@ -296,7 +294,7 @@ export default function ChatBox({
       <Divider />
 
       <Box component="form" onSubmit={handleSubmit} sx={{ p: 1.5 }}>
-        <Stack direction="row" spacing={1} alignItems="flex-end">
+        <Stack direction="row" spacing={1}>
           <TextField
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
