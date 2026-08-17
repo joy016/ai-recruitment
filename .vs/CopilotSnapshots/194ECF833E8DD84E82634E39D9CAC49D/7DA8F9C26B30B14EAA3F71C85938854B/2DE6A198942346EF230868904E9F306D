@@ -1,0 +1,49 @@
+﻿using ai_recruitment.Features.ApplicationStatuses;
+using Microsoft.AspNetCore.Http;
+using System.ComponentModel.DataAnnotations;
+
+namespace ai_recruitment.Features.Candidates
+{
+    public class InsertApplicantDto
+    {
+        // public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        [Required]
+        [EmailAddress]
+        [MaxLength(320)]
+        public required string EmailAddress { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public required string FirstName { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public required string LastName { get; set; }
+
+        [Required]
+        [Phone]
+        [MaxLength(30)]
+        public required string PhoneNumber { get; set; }
+
+        [Range(0, 100)]
+        public required int YearsOfExperience { get; set; }
+
+        // Resume will be uploaded as a file from the frontend form (multipart/form-data)
+        [Required]
+        public IFormFile? ResumeFile { get; set; }
+
+        // Optional: existing URL if provided
+        public string? ResumeUrl { get; set; }
+
+        [Url]
+        [MaxLength(200)]
+        public string? LinkedInProfile { get; set; }
+
+        [MaxLength(4000)]
+        public string? CoverLetter { get; set; }
+        //public int ApplicantStatusId { get; set; }
+        // public ApplicantStatus ApplicantStatus { get; set; } = null!;
+
+    }
+}

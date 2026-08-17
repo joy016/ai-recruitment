@@ -1,0 +1,51 @@
+﻿using DotNetEnv;
+
+// Load environment variables from .env (if present)
+Env.Load();
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add services to the container.
+builder.Services.AddControllers();
+
+// Configure EF Core connection string from environment (.env) or fallback to appsettings or SQLite
+var envConnection = Environment.GetEnvironmentVariable("DEFAULT_CONNECTION");
+var configConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+var connectionString = envConnection ?? configConnection ?? "Data Source=ai_recruitment.db";
+
+// If the connection string contains "Host=" or "Username=", assume PostgreSQL; otherwise use SQLite
+if (!string.IsNullOrEmpty(connectionString) && (connectionString.Contains("Host=") || connectionString.Contains("Username=") || connectionString.Contains("Server=")))
+{
+    // Use Npgsql provider for PostgreSQL
+    builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
+}
+else
+{
+    builder.Services.AddDbContext<AppDbContext>(options => options.UseSqlite(connectionString));
+}
+
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+builder.Services.AddOpenApi();
+
+var app = builder.Build();
+
+// Ensure database is created on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.MapOpenApi();
+}
+
+app.UseHttpsRedirection();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
