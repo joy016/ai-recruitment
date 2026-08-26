@@ -1,4 +1,4 @@
-﻿using ai_recruitment.Features.Candidates;
+﻿using ai_recruitment.Features.Candidates.model;
 using System.ComponentModel.DataAnnotations;
 
 namespace ai_recruitment.Features.ApplicationStatuses
@@ -14,7 +14,7 @@ namespace ai_recruitment.Features.ApplicationStatuses
         public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        public ICollection<Applicant> Applicants { get; set; } = new List<Applicant>();
+        //public ICollection<Applicant> Applicants { get; set; } = new List<Applicant>();
 
     }
 }

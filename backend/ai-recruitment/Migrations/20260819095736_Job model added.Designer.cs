@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ai_recruitment.Data;
@@ -11,9 +12,11 @@ using ai_recruitment.Data;
 namespace ai_recruitment.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260819095736_Job model added")]
+    partial class Jobmodeladded
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -178,6 +181,9 @@ namespace ai_recruitment.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("ApplicantStatusStatusId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("CoverLetter")
                         .HasColumnType("text");
 
@@ -227,6 +233,8 @@ namespace ai_recruitment.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApplicantStatusStatusId");
 
                     b.HasIndex("EmailAddress")
                         .IsUnique();
@@ -261,9 +269,6 @@ namespace ai_recruitment.Migrations
                     b.Property<DateTime?>("InterviewSched")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("JobId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -297,8 +302,6 @@ namespace ai_recruitment.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("JobId");
-
                     b.ToTable("Candidates");
                 });
 
@@ -309,13 +312,6 @@ namespace ai_recruitment.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("JobId"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Department")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<string>("JobDescription")
                         .IsRequired()
@@ -350,20 +346,16 @@ namespace ai_recruitment.Migrations
                     b.ToTable("Jobs");
                 });
 
-            modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Candidate", b =>
+            modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Applicant", b =>
                 {
-                    b.HasOne("ai_recruitment.Features.JobPosts.Model.Job", "Job")
-                        .WithMany("Candidates")
-                        .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Job");
+                    b.HasOne("ai_recruitment.Features.ApplicationStatuses.ApplicantStatus", null)
+                        .WithMany("Applicants")
+                        .HasForeignKey("ApplicantStatusStatusId");
                 });
 
-            modelBuilder.Entity("ai_recruitment.Features.JobPosts.Model.Job", b =>
+            modelBuilder.Entity("ai_recruitment.Features.ApplicationStatuses.ApplicantStatus", b =>
                 {
-                    b.Navigation("Candidates");
+                    b.Navigation("Applicants");
                 });
 #pragma warning restore 612, 618
         }

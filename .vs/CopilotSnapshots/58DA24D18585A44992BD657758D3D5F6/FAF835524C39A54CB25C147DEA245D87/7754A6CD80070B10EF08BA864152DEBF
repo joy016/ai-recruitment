@@ -1,0 +1,35 @@
+﻿using Microsoft.AspNetCore.Mvc;
+
+namespace ai_recruitment.Features.JobPosts.Controller
+{
+
+    [ApiController]
+    [Route("api/[controller]")]
+    public class InsertJobController : ControllerBase
+    {
+
+        [HttpPost]
+        public IActionResult InsertJob([FromBody] Dto.InsertJobDto jobDto)
+        {
+            if (jobDto == null)
+            {
+                return BadRequest("Job data is required.");
+            }
+
+            // Model validation via data annotations; [ApiController] will auto-validate,
+            // but explicitly returning ModelState here keeps behavior clear.
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(ModelState);
+            }
+
+            return Ok(new
+            {
+                Message = "Job inserted successfully",
+                JobDetails = jobDto
+            });
+        }
+
+
+    }
+}

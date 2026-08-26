@@ -1,5 +1,6 @@
 ﻿using ai_recruitment.Features.ApplicationStatuses;
-using ai_recruitment.Features.Candidates;
+using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.JobPosts.Model;
 using Microsoft.EntityFrameworkCore;
 
 namespace ai_recruitment.Data
@@ -17,6 +18,7 @@ namespace ai_recruitment.Data
        // public DbSet<Product> Products => Set<Product>();   --- sample 
        public DbSet<Candidate> Candidates => Set<Candidate>();
        public DbSet<ApplicantStatus> ApplicantStatuses => Set<ApplicantStatus>();
+       public DbSet<Job> Jobs => Set<Job>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -29,6 +31,11 @@ namespace ai_recruitment.Data
             modelBuilder.Entity<Applicant>()
                 .HasIndex(a => a.EmailAddress)
                 .IsUnique();
+
+            modelBuilder.Entity<Candidate>()
+             .HasOne(j => j.Job)
+              .WithMany(j => j.Candidates)
+             .HasForeignKey(j => j.JobId);
 
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(

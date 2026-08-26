@@ -1,11 +1,12 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using ai_recruitment.Features.ApplicationStatuses;
+using System.ComponentModel.DataAnnotations;
 
-namespace ai_recruitment.Features.Candidates
+namespace ai_recruitment.Features.Candidates.model
 {
-    public class Candidate
+    public class Applicant
     {
         public Guid Id { get; set; }
-
+      
         public required string EmailAddress { get; set; }
         public required string FirstName { get; set; }
         public required string LastName { get; set; }
@@ -23,12 +24,14 @@ namespace ai_recruitment.Features.Candidates
         public string Role { get; set; } = string.Empty;
         [Required]
         [MaxLength(100)]
-        public int ApplicantStatusId { get; set; } = 1;
+        public string ApplicantStatus { get; set; } = "AI Screening";
         public DateTime? InterviewSched { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
+      
+
 
     }
 }

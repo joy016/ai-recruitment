@@ -10,10 +10,15 @@ namespace ai_recruitment.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Convert ApplicantStatusId from character varying to integer with USING clause
-            migrationBuilder.Sql(
-                @"ALTER TABLE ""Candidates"" 
-                  ALTER COLUMN ""ApplicantStatusId"" TYPE integer USING ""ApplicantStatusId""::integer;");
+            migrationBuilder.AlterColumn<int>(
+                name: "ApplicantStatusId",
+                table: "Candidates",
+                type: "integer",
+                maxLength: 100,
+                nullable: false,
+                oldClrType: typeof(string),
+                oldType: "character varying(100)",
+                oldMaxLength: 100);
         }
 
         /// <inheritdoc />
