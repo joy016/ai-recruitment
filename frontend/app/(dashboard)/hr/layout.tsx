@@ -24,6 +24,7 @@ import {
 } from "@mui/material";
 import {
   CheckCircle,
+  Close,
   Dashboard,
   Description,
   Group,
@@ -273,9 +274,26 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
         }}
       >
         <Box sx={{ p: 2.2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
-            Notifications
-          </Typography>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: 1,
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
+              Notifications
+            </Typography>
+            <IconButton
+              aria-label="Close notifications"
+              onClick={() => setNotificationsOpen(false)}
+              size="small"
+              sx={{ color: "#5f7f96", mt: -0.5, mr: -0.8 }}
+            >
+              <Close />
+            </IconButton>
+          </Box>
           <Typography variant="body2" sx={{ color: "#5f7f96", mt: 0.4 }}>
             Track screening outcomes, interview updates, and candidate actions.
           </Typography>

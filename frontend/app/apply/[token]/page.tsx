@@ -6,12 +6,15 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   Container,
   Paper,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
+
+import { createCandidate } from "@/lib/api/candidate";
 
 const allowedResumeTypes = new Set([
   "application/pdf",
@@ -34,10 +37,16 @@ export default function ApplicationPage() {
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [resumeInputKey, setResumeInputKey] = useState(0);
 
   const resolvedToken = routeParams.token || "N/A";
   const resolvedRole = useMemo(
     () => queryParams.get("role") || "General Application",
+    [queryParams],
+  );
+  const resolvedJobId = useMemo(
+    () => Number(queryParams.get("jobId")) || 0,
     [queryParams],
   );
 
@@ -63,18 +72,53 @@ export default function ApplicationPage() {
     setErrorMessage("");
   };
 
-  const handleSubmit = (event: React.SyntheticEvent<HTMLFormElement>) => {
+  const resetForm = () => {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPhone("");
+    setYearsOfExperience("");
+    setLinkedinUrl("");
+    setCoverLetter("");
+    setResumeFile(null);
+    setResumeInputKey((key) => key + 1);
+  };
+
+  const handleSubmit = async (event: React.SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     const resumeError = validateResume(resumeFile);
 
-    if (resumeError) {
+    if (resumeError || !resumeFile) {
       setErrorMessage(resumeError);
       setIsSubmitted(false);
       return;
     }
 
     setErrorMessage("");
-    setIsSubmitted(true);
+    setIsSubmitting(true);
+
+    try {
+      await createCandidate({
+        firstName,
+        lastName,
+        email,
+        phoneNumber: phone,
+        yearsOfExperience: Number(yearsOfExperience) || 0,
+        linkedInUrl: linkedinUrl,
+        coverLetter,
+        resume: resumeFile,
+        role: resolvedRole,
+        JobId: resolvedJobId,
+      });
+
+      setIsSubmitted(true);
+      resetForm();
+    } catch (error) {
+      setErrorMessage("Failed to submit application. Please try again.");
+      setIsSubmitted(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -214,6 +258,7 @@ export default function ApplicationPage() {
                 >
                   Choose Resume File
                   <input
+                    key={resumeInputKey}
                     type="file"
                     hidden
                     required
@@ -246,6 +291,12 @@ export default function ApplicationPage() {
                 type="submit"
                 variant="contained"
                 size="large"
+                disabled={isSubmitting}
+                startIcon={
+                  isSubmitting ? (
+                    <CircularProgress size={18} color="inherit" />
+                  ) : undefined
+                }
                 sx={{
                   mt: 1,
                   borderRadius: 2,
@@ -260,7 +311,7 @@ export default function ApplicationPage() {
                   },
                 }}
               >
-                Submit Application
+                {isSubmitting ? "Submitting..." : "Submit Application"}
               </Button>
             </Stack>
           </Box>

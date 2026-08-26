@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Box,
   ButtonBase,
   Chip,
+  CircularProgress,
   Grid,
   Paper,
   Stack,
@@ -17,41 +18,11 @@ import {
   Typography,
 } from "@mui/material";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
-
-const openJobs = [
-  {
-    id: "JOB-201",
-    title: "Frontend Developer",
-    department: "Engineering",
-    applicants: 24,
-    status: "Urgent",
-    posted: "2 days ago",
-  },
-  {
-    id: "JOB-202",
-    title: "Backend Developer",
-    department: "Engineering",
-    applicants: 18,
-    status: "Active",
-    posted: "4 days ago",
-  },
-  {
-    id: "JOB-203",
-    title: "Product Analyst",
-    department: "Product",
-    applicants: 12,
-    status: "Screening",
-    posted: "1 week ago",
-  },
-  {
-    id: "JOB-204",
-    title: "QA Engineer",
-    department: "Quality Assurance",
-    applicants: 9,
-    status: "Active",
-    posted: "3 days ago",
-  },
-];
+import { JOBS_PAGE_SIZE } from "@/app/(constants)/job";
+import { JobItem } from "@/lib/types/job";
+import { getAllJobs } from "@/lib/api/job";
+import { formatRelativeTime } from "@/lib/utils/date";
+import CommonTable, { CommonTableColumn } from "@/app/component/CommonTable";
 
 const newApplicants = [
   {
@@ -147,18 +118,101 @@ const interviewSchedule = [
 
 export default function HrDashboardPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
+  const [jobPageSize, setJobPageSize] = useState(JOBS_PAGE_SIZE);
+  const [jobPageNumber, setJobPageNumber] = useState(1);
+  const [totalJobCount, setTotalJobCount] = useState(0);
+  const [jobPosts, setJobPosts] = useState<JobItem[]>([]);
+  const [isLoadingOpenJobs, setIsLoadingOpenJobs] = useState(true);
 
   const statCards = useMemo(
     () => [
-      { label: "Open Jobs", value: String(openJobs.length) },
-      { label: "New Applicants", value: String(newApplicants.length) },
-      { label: "Interviews Today", value: String(interviewSchedule.length) },
+      {
+        label: "Open Jobs",
+        value: String(totalJobCount),
+        isLoading: isLoadingOpenJobs,
+      },
+      {
+        label: "New Applicants",
+        value: String(newApplicants.length),
+        isLoading: false,
+      },
+      {
+        label: "Interviews Today",
+        value: String(interviewSchedule.length),
+        isLoading: false,
+      },
+    ],
+    [totalJobCount, isLoadingOpenJobs],
+  );
+
+  const jobColumns: CommonTableColumn<JobItem>[] = useMemo(
+    () => [
+      {
+        key: "jobTitle",
+        label: "Job Title",
+        render: (job) => job.jobTitle,
+        secondary: (job) => `JOB-00${job.jobId}`,
+      },
+      {
+        key: "department",
+        label: "Department",
+        render: (job) => job.department,
+      },
+      {
+        key: "applicantCount",
+        label: "Applicants",
+        render: (job) => job.applicantCount,
+      },
+      {
+        key: "jobStatus",
+        label: "Status",
+        render: (job) => (
+          <Chip
+            label={job.jobStatus}
+            size="small"
+            sx={{ bgcolor: "#eef7ff", color: "#1f80b6", fontWeight: 700 }}
+          />
+        ),
+      },
+      {
+        key: "createdAt",
+        label: "Posted",
+        render: (job) => formatRelativeTime(job.createdAt),
+      },
     ],
     [],
   );
 
+  const fetchInitialOpenJobs = async () => {
+    try {
+      const response = await getAllJobs("Open", jobPageNumber, jobPageSize);
+      setJobPosts(response.data);
+      setTotalJobCount(response.applicantCount || 0);
+    } catch (error) {
+      console.error("Failed to fetch open jobs:", error);
+    } finally {
+      setIsLoadingOpenJobs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialOpenJobs();
+  }, [jobPageNumber, jobPageSize]);
+
+  const handleJobPageChange = (nextPageNumber: number) => {
+    setIsLoadingOpenJobs(true);
+    setJobPageNumber(nextPageNumber);
+  };
+
+  const handleJobPageSizeChange = (nextPageSize: number) => {
+    setIsLoadingOpenJobs(true);
+    setJobPageNumber(1);
+    setJobPageSize(nextPageSize);
+  };
+
   const handleCardClick = (label: string) => {
-    setActiveCard((current) => (current === label ? null : label));
+    const isOpening = activeCard !== label;
+    setActiveCard(isOpening ? label : null);
   };
 
   return (
@@ -215,12 +269,20 @@ export default function HrDashboardPage() {
                     <Typography variant="body2" sx={{ color: "#5f8199" }}>
                       {card.label}
                     </Typography>
-                    <Typography
-                      variant="h4"
-                      sx={{ mt: 1.2, fontWeight: 700, color: "#1f80b6" }}
-                    >
-                      {card.value}
-                    </Typography>
+                    {card.isLoading ? (
+                      <Box
+                        sx={{ mt: 1.2, display: "flex", alignItems: "center" }}
+                      >
+                        <CircularProgress size={26} sx={{ color: "#1f80b6" }} />
+                      </Box>
+                    ) : (
+                      <Typography
+                        variant="h4"
+                        sx={{ mt: 1.2, fontWeight: 700, color: "#1f80b6" }}
+                      >
+                        {card.value}
+                      </Typography>
+                    )}
                   </Box>
 
                   <Chip
@@ -274,57 +336,16 @@ export default function HrDashboardPage() {
             </Typography>
           </Box>
 
-          <TableContainer sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 760 }}>
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#f7fbfe" }}>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Job Title
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Department
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Applicants
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Status
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Posted
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {openJobs.map((job) => (
-                  <TableRow key={job.id} hover>
-                    <TableCell>
-                      <Typography sx={{ fontWeight: 700, color: "#244964" }}>
-                        {job.title}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: "#6b879c" }}>
-                        {job.id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{job.department}</TableCell>
-                    <TableCell>{job.applicants}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={job.status}
-                        size="small"
-                        sx={{
-                          bgcolor: "#eef7ff",
-                          color: "#1f80b6",
-                          fontWeight: 700,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>{job.posted}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <CommonTable
+            columns={jobColumns}
+            data={jobPosts}
+            getRowKey={(a) => a.jobId}
+            pageSize={jobPageSize}
+            pageNumber={jobPageNumber}
+            totalCount={totalJobCount}
+            onPageChange={handleJobPageChange}
+            onPageSizeChange={handleJobPageSizeChange}
+          />
         </Paper>
       ) : null}
 
