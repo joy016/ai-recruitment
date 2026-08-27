@@ -1,0 +1,16 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.tmp
+*.tmp_proj
+Dockerfile
+.dockerignore
+.git/
+.gitignore
+appsettings.Development.json
+Properties/launchSettings.json
+wwwroot/uploads/
+README.md
+ai-recruitment.http

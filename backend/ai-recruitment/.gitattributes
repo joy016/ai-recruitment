@@ -1,0 +1,4 @@
+# Keep container/build files LF so they work inside Linux images
+Dockerfile text eol=lf
+.dockerignore text eol=lf
+*.sh text eol=lf

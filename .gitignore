@@ -1,0 +1,40 @@
+# ---- Visual Studio / Rider / VS Code ----
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ---- .NET build output ----
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.tmp
+*.tmp_proj
+*_wpftmp.csproj
+*.binlog
+artifacts/
+
+# ---- Local configuration / secrets ----
+appsettings.Development.json
+appsettings.Local.json
+.env
+*.pfx
+
+# ---- Node / Next.js (frontend) ----
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Runtime uploads ----
+backend/ai-recruitment/wwwroot/uploads/
