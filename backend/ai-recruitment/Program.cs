@@ -13,8 +13,13 @@ builder.Services.AddOpenApi();
 //builder.Services.AddEndpointsApiExplorer();
 //builder.Services.AddSwaggerGen();
 
+// Get connection string from DATABASE_URL environment variable (set by Railway)
+// Falls back to DefaultConnection in appsettings.json for local development
+var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL") 
+    ?? builder.Configuration.GetConnectionString("DefaultConnection");
+
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddCors(options =>
 {
@@ -54,3 +59,4 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
