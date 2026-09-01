@@ -27,6 +27,8 @@ namespace ai_recruitment.Features.Candidates.Dto
 
         [MaxLength(500)]
         public string? LinkedInUrl { get; set; }
+        public string? PortfolioUrl { get; set; }
+        public string? SourceOfApplication { get; set; }
 
         public string? CoverLetter { get; set; }
 

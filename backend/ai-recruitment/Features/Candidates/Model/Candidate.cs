@@ -30,8 +30,9 @@ namespace ai_recruitment.Features.Candidates.model
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
+        public string? PortfolioLink { get; set; }
 
-   
+        public string? SourcOfApplication { get; set; }
 
         public int JobId { get; set; }        
         public Job Job { get; set; } = null!;  

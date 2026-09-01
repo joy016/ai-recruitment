@@ -83,6 +83,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
                     CreatedAt = j.CreatedAt,
                     Department = j.Department,
                     ApplicantCount = j.Candidates.Count(),
+                
                 })
                 .ToListAsync();
 
@@ -91,10 +92,10 @@ namespace ai_recruitment.Features.JobPosts.Controller
             return Ok(new
             {
                 data = jobs,
-                ApplicantCount = totalCount,
                 pageNumber,
                 pageSize,
-                totalPage = (int)Math.Ceiling((double)totalCount / pageSize)
+                totalPage = (int)Math.Ceiling((double)totalCount / pageSize),
+                totalCount,
             });
         }
 

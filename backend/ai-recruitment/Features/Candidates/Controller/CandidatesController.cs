@@ -121,6 +121,7 @@ namespace ai_recruitment.Features.Candidates.controller
                 ResumeFilePath = $"/uploads/resumes/{uniqueFileName}",
                 Role = dto.Role,
                 JobId = dto.JobId,
+                SourcOfApplication = dto.SourceOfApplication,
 
                 // Initial status
                 ApplicantStatusId = 1,
@@ -155,10 +156,11 @@ namespace ai_recruitment.Features.Candidates.controller
             form.Add(Field(candidate.EmailAddress ?? string.Empty), "email");
             form.Add(Field(candidate.PhoneNumber ?? string.Empty), "phoneNumber");
             form.Add(Field(candidate.YearsOfExperience.ToString()), "yearsOfExperience");
-            form.Add(Field(candidate.LinkedInProfile ?? string.Empty), "linkedInProfile");
+            form.Add(Field(candidate.PortfolioLink ?? string.Empty), "portfolioLink");
             form.Add(Field(candidate.CoverLetter ?? string.Empty), "coverLetter");
             form.Add(Field(candidate.ResumeFileName ?? string.Empty), "resumeFileName");
             form.Add(Field(candidate.Role ?? string.Empty), "role");
+            form.Add(Field(candidate.SourcOfApplication ?? string.Empty), "sourceOfApplication");
             form.Add(Field(candidate.ApplicantStatusId.ToString()), "applicantStatusId");
 
             // Resolve physical path to the saved resume
@@ -257,11 +259,24 @@ namespace ai_recruitment.Features.Candidates.controller
             return Ok(candidate);
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetAllCandidates()
+        [HttpGet("getCandidates")]
+        public async Task<IActionResult> GetAllCandidates([FromQuery] int? jobId, [FromQuery] int? pageNumber = 1, [FromQuery] int? pageSize = 10)
         {
-            
-            var candidates = await _context.Candidates
+            var query = _context.Candidates.AsNoTracking()
+                        .AsQueryable();
+
+            if (jobId.HasValue && jobId.Value != 0)
+            {
+                query = query.Where(c => c.JobId == jobId.Value);
+            }
+
+            query = query.OrderBy(c => c.CreatedAt);
+            var totalCount = await query.CountAsync();
+
+            // 3. Apply offset math and execute query
+            var candidates = await query
+                .Skip((pageNumber.GetValueOrDefault(1) - 1) * pageSize.GetValueOrDefault(10))
+                .Take(pageSize.GetValueOrDefault(10))
                 .Select(c => new CandidateListDto
                 {
                     Id = c.Id,
@@ -275,7 +290,94 @@ namespace ai_recruitment.Features.Candidates.controller
                     ResumePath = c.ResumeFilePath
                 })
                 .ToListAsync();
-            return Ok(candidates);  
+
+            // 4. Calculate total pages
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize.GetValueOrDefault(10));
+
+
+            // 5. Return data along with page metadata
+
+            return Ok(new
+            {
+                TotalCount = totalCount,
+                TotalPages = totalPages,
+                CurrentPage = pageNumber.GetValueOrDefault(1),
+                PageSize = pageSize.GetValueOrDefault(10),
+                Data = candidates,
+            });
+
+        }
+
+        [HttpGet("getNewCandidates")]
+        public async Task<IActionResult> GetNewCandidates([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+
+            var query = _context.Candidates.AsNoTracking()
+                        .Where(c => c.ApplicantStatusId == 1)
+                        .AsQueryable();
+
+            var totalCount = await query.CountAsync();
+
+            var newCandidates = await query.Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .Select(c => new NewCandidateListDto
+                {
+                    CandidateId = c.Id,
+                    CandidateName = c.FirstName + " " + c.LastName,
+                    Position = c.Role,
+                    AppliedDate = c.CreatedAt,
+                    WorkExperience = c.YearsOfExperience.ToString(),
+                    ApplicationSource = c.SourcOfApplication
+                }).ToListAsync();
+
+            return Ok(new
+            {
+                data = newCandidates,
+                TotalCount = totalCount,
+                pageNumber,
+                pageSize,
+                TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            });
+
+            //var newCandidates = await _context.Candidates
+            //    .Where(c => c.ApplicantStatusId == 1)
+            //    .Select(c => new NewCandidateListDto
+            //    {
+            //        CandidateId = c.Id,
+            //        CandidateName = c.FirstName + " " + c.LastName,
+            //        Position = c.Role,
+            //        AppliedDate = c.CreatedAt,
+            //        WorkExperience = c.YearsOfExperience.ToString(),
+            //        ApplicationSource = c.SourcOfApplication
+            //    })
+            //    .ToListAsync();
+            //return Ok(new
+            //{
+            //    Candidates = newCandidates,
+            //    Status = 200
+            //});
+        }
+
+        [HttpPut("updateCandidateStatus")]
+        public async Task<IActionResult> UpdateCandidateStatus([FromBody] UpdateCandidateStatusDto dto)
+        {
+            var candidate = await _context.Candidates.FindAsync(dto.Id);
+            if (candidate == null)
+            {
+                return NotFound();
+            }
+
+            candidate.ApplicantStatusId = dto.ApplicantStatusId;
+            candidate.InterviewSched = dto.InterviewSched;
+            candidate.UpdatedAt = dto.UpdatedAt;
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                statusCode = 200,
+                statusMessage = "Candidate status updated successfully."
+            });
         }
     }
 }
