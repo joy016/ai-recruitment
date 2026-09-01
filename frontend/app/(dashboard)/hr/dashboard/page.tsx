@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Box,
   ButtonBase,
@@ -9,54 +9,63 @@ import {
   Grid,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import { ExpandLess, ExpandMore } from "@mui/icons-material";
-import { JOBS_PAGE_SIZE } from "@/app/(constants)/job";
-import { JobItem } from "@/lib/types/job";
-import { getAllJobs } from "@/lib/api/job";
-import { formatRelativeTime } from "@/lib/utils/date";
-import CommonTable, { CommonTableColumn } from "@/app/component/CommonTable";
+import { BarChart } from "@mui/x-charts/BarChart";
+import { LineChart } from "@mui/x-charts/LineChart";
+import { PieChart } from "@mui/x-charts/PieChart";
+import CardContainer from "@/app/component/CardContainer";
 
-const newApplicants = [
-  {
-    id: "APP-1016",
-    name: "Isabella Rivera",
-    position: "Frontend Developer",
-    appliedAt: "8:05 AM",
-    experience: "3 years",
-    source: "LinkedIn",
-  },
-  {
-    id: "APP-1017",
-    name: "Noah Garcia",
-    position: "Backend Developer",
-    appliedAt: "9:10 AM",
-    experience: "5 years",
-    source: "Company Website",
-  },
-  {
-    id: "APP-1018",
-    name: "Mia Flores",
-    position: "QA Engineer",
-    appliedAt: "10:25 AM",
-    experience: "4 years",
-    source: "Referral",
-  },
-  {
-    id: "APP-1019",
-    name: "Liam Bautista",
-    position: "UI/UX Designer",
-    appliedAt: "11:40 AM",
-    experience: "2 years",
-    source: "JobStreet",
-  },
+import OpenJobs from "./(components)/OpenJobs";
+import NewApplicants from "./(components)/NewApplicants";
+import InterviewsToday from "./(components)/InterviewsToday";
+
+// Fixed-order categorical palette (identity color), validated for CVD-safe
+// adjacency - see the dataviz color-formula: never cycle or reorder per chart.
+const CATEGORICAL_COLORS = [
+  "#2a78d6", // blue
+  "#eb6834", // orange
+  "#1baf7a", // aqua
+  "#eda100", // yellow
+  "#e87ba4", // magenta
+];
+
+const applicantsBySourceData = [
+  { id: 0, label: "LinkedIn", value: 38 },
+  { id: 1, label: "Referral", value: 22 },
+  { id: 2, label: "Company Website", value: 18 },
+  { id: 3, label: "JobStreet", value: 14 },
+  { id: 4, label: "Other", value: 8 },
+];
+
+const applicantsByStatusData = [
+  { id: 0, label: "Technical Interview", value: 20 },
+  { id: 1, label: "Final Interview", value: 11 },
+  { id: 2, label: "Job Offer", value: 8 },
+  { id: 3, label: "Hired", value: 14 },
+  { id: 4, label: "Rejected", value: 25 },
+];
+
+const applicantsByJobData = [
+  { job: "Frontend Developer", applicants: 24 },
+  { job: "Backend Developer", applicants: 19 },
+  { job: "QA Engineer", applicants: 15 },
+  { job: "UI/UX Designer", applicants: 12 },
+  { job: "Product Analyst", applicants: 9 },
+  { job: "HR Associate", applicants: 6 },
+];
+
+const weeklyApplicationsTrend = [
+  { day: "Mon", applications: 12 },
+  { day: "Tue", applications: 18 },
+  { day: "Wed", applications: 9 },
+  { day: "Thu", applications: 22 },
+  { day: "Fri", applications: 17 },
+  { day: "Sat", applications: 7 },
+  { day: "Sun", applications: 4 },
 ];
 
 const interviewSchedule = [
@@ -117,23 +126,37 @@ const interviewSchedule = [
 ];
 
 export default function HrDashboardPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const pieChartHeight = isMobile ? 320 : 260;
+  const pieLegendSlotProps = {
+    legend: isMobile
+      ? {
+          direction: "horizontal" as const,
+          position: {
+            vertical: "bottom" as const,
+            horizontal: "center" as const,
+          },
+        }
+      : {
+          direction: "vertical" as const,
+          position: { vertical: "middle" as const, horizontal: "end" as const },
+        },
+  };
   const [activeCard, setActiveCard] = useState<string | null>(null);
-  const [jobPageSize, setJobPageSize] = useState(JOBS_PAGE_SIZE);
-  const [jobPageNumber, setJobPageNumber] = useState(1);
   const [totalJobCount, setTotalJobCount] = useState(0);
-  const [jobPosts, setJobPosts] = useState<JobItem[]>([]);
-  const [isLoadingOpenJobs, setIsLoadingOpenJobs] = useState(true);
+  const [newApplicantCount, setNewApplicantCount] = useState(0);
 
   const statCards = useMemo(
     () => [
       {
         label: "Open Jobs",
         value: String(totalJobCount),
-        isLoading: isLoadingOpenJobs,
+        isLoading: false,
       },
       {
         label: "New Applicants",
-        value: String(newApplicants.length),
+        value: String(newApplicantCount),
         isLoading: false,
       },
       {
@@ -142,73 +165,8 @@ export default function HrDashboardPage() {
         isLoading: false,
       },
     ],
-    [totalJobCount, isLoadingOpenJobs],
+    [totalJobCount, newApplicantCount],
   );
-
-  const jobColumns: CommonTableColumn<JobItem>[] = useMemo(
-    () => [
-      {
-        key: "jobTitle",
-        label: "Job Title",
-        render: (job) => job.jobTitle,
-        secondary: (job) => `JOB-00${job.jobId}`,
-      },
-      {
-        key: "department",
-        label: "Department",
-        render: (job) => job.department,
-      },
-      {
-        key: "applicantCount",
-        label: "Applicants",
-        render: (job) => job.applicantCount,
-      },
-      {
-        key: "jobStatus",
-        label: "Status",
-        render: (job) => (
-          <Chip
-            label={job.jobStatus}
-            size="small"
-            sx={{ bgcolor: "#eef7ff", color: "#1f80b6", fontWeight: 700 }}
-          />
-        ),
-      },
-      {
-        key: "createdAt",
-        label: "Posted",
-        render: (job) => formatRelativeTime(job.createdAt),
-      },
-    ],
-    [],
-  );
-
-  const fetchInitialOpenJobs = async () => {
-    try {
-      const response = await getAllJobs("Open", jobPageNumber, jobPageSize);
-      setJobPosts(response.data);
-      setTotalJobCount(response.applicantCount || 0);
-    } catch (error) {
-      console.error("Failed to fetch open jobs:", error);
-    } finally {
-      setIsLoadingOpenJobs(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchInitialOpenJobs();
-  }, [jobPageNumber, jobPageSize]);
-
-  const handleJobPageChange = (nextPageNumber: number) => {
-    setIsLoadingOpenJobs(true);
-    setJobPageNumber(nextPageNumber);
-  };
-
-  const handleJobPageSizeChange = (nextPageSize: number) => {
-    setIsLoadingOpenJobs(true);
-    setJobPageNumber(1);
-    setJobPageSize(nextPageSize);
-  };
 
   const handleCardClick = (label: string) => {
     const isOpening = activeCard !== label;
@@ -308,203 +266,154 @@ export default function HrDashboardPage() {
           </Grid>
         ))}
       </Grid>
+      <OpenJobs
+        setTotalJobCount={setTotalJobCount}
+        totalJobCount={totalJobCount}
+        isVisible={activeCard === "Open Jobs"}
+      />
 
-      {activeCard === "Open Jobs" ? (
-        <Paper
-          elevation={0}
+      <NewApplicants
+        isVisible={activeCard === "New Applicants"}
+        setNewApplicantCount={setNewApplicantCount}
+        newApplicantCount={newApplicantCount}
+      />
+
+      {activeCard === "Interviews Today" ? <InterviewsToday /> : null}
+
+      <CardContainer>
+        <Box
           sx={{
-            mt: 2.4,
-            borderRadius: 3,
-            border: "1px solid #d7e8f5",
-            backgroundColor: "#ffffff",
-            overflow: "hidden",
+            px: { xs: 1.5, sm: 2.5 },
+            py: 2,
+            borderBottom: "1px solid #e5f0f7",
+            background: "linear-gradient(180deg, #f9fcff 0%, #f3faff 100%)",
           }}
         >
-          <Box
-            sx={{
-              px: { xs: 1.5, sm: 2.5 },
-              py: 2,
-              borderBottom: "1px solid #e5f0f7",
-              background: "linear-gradient(180deg, #f9fcff 0%, #f3faff 100%)",
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
-              Open Job Posts
-            </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, color: "#5f8199" }}>
-              Monitor active openings, department demand, and applicant volume.
-            </Typography>
-          </Box>
+          <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
+            Recruitment Analytics
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 0.5, color: "#5f8199" }}>
+            Applicant sourcing, hiring demand by role, and weekly application
+            volume. (Sample data)
+          </Typography>
+        </Box>
 
-          <CommonTable
-            columns={jobColumns}
-            data={jobPosts}
-            getRowKey={(a) => a.jobId}
-            pageSize={jobPageSize}
-            pageNumber={jobPageNumber}
-            totalCount={totalJobCount}
-            onPageChange={handleJobPageChange}
-            onPageSizeChange={handleJobPageSizeChange}
-          />
-        </Paper>
-      ) : null}
-
-      {activeCard === "New Applicants" ? (
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 2.4,
-            borderRadius: 3,
-            border: "1px solid #d7e8f5",
-            backgroundColor: "#ffffff",
-            overflow: "hidden",
-          }}
-        >
-          <Box
-            sx={{
-              px: { xs: 1.5, sm: 2.5 },
-              py: 2,
-              borderBottom: "1px solid #e5f0f7",
-              background: "linear-gradient(180deg, #f9fcff 0%, #f3faff 100%)",
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
-              New Applicants
+        <Grid container spacing={2.2} sx={{ p: { xs: 1.5, sm: 2.5 } }}>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
+            >
+              Applicants by Source
             </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, color: "#5f8199" }}>
-              Review the latest candidates entering the hiring pipeline today.
-            </Typography>
-          </Box>
+            <PieChart
+              series={[
+                {
+                  data: applicantsBySourceData,
+                  innerRadius: "42%",
+                  outerRadius: "80%",
+                  paddingAngle: 2,
+                  cornerRadius: 3,
+                  arcLabel: "value",
+                  arcLabelMinAngle: 20,
+                },
+              ]}
+              colors={CATEGORICAL_COLORS}
+              height={pieChartHeight}
+              slotProps={pieLegendSlotProps}
+              sx={{
+                "& .MuiChartsArcLabel-root": {
+                  fill: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: 12,
+                },
+              }}
+            />
+          </Grid>
 
-          <TableContainer sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 760 }}>
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#f7fbfe" }}>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Applicant
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Position
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Applied At
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Experience
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Source
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {newApplicants.map((applicant) => (
-                  <TableRow key={applicant.id} hover>
-                    <TableCell>
-                      <Typography sx={{ fontWeight: 700, color: "#244964" }}>
-                        {applicant.name}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: "#6b879c" }}>
-                        {applicant.id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{applicant.position}</TableCell>
-                    <TableCell>{applicant.appliedAt}</TableCell>
-                    <TableCell>{applicant.experience}</TableCell>
-                    <TableCell>{applicant.source}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      ) : null}
-
-      {activeCard === "Interviews Today" ? (
-        <Paper
-          elevation={0}
-          sx={{
-            mt: 2.4,
-            borderRadius: 3,
-            border: "1px solid #d7e8f5",
-            backgroundColor: "#ffffff",
-            overflow: "hidden",
-          }}
-        >
-          <Box
-            sx={{
-              px: { xs: 1.5, sm: 2.5 },
-              py: 2,
-              borderBottom: "1px solid #e5f0f7",
-              background: "linear-gradient(180deg, #f9fcff 0%, #f3faff 100%)",
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
-              Interview Schedule Today
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
+            >
+              Applicants by Job
             </Typography>
-            <Typography variant="body2" sx={{ mt: 0.5, color: "#5f8199" }}>
-              Review today&apos;s candidates, interview stage, assigned
-              interviewer, and meeting channel.
-            </Typography>
-          </Box>
+            <BarChart
+              dataset={applicantsByJobData}
+              layout="horizontal"
+              yAxis={[
+                {
+                  dataKey: "job",
+                  scaleType: "band",
+                  width: "auto",
+                  tickLabelStyle: { fontSize: 11 },
+                },
+              ]}
+              series={[{ dataKey: "applicants", color: CATEGORICAL_COLORS[0] }]}
+              height={260}
+              borderRadius={4}
+              grid={{ vertical: true }}
+              hideLegend
+            />
+          </Grid>
 
-          <TableContainer sx={{ overflowX: "auto" }}>
-            <Table sx={{ minWidth: 760 }}>
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#f7fbfe" }}>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Candidate
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Position
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Stage
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Time
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Interviewer
-                  </TableCell>
-                  <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                    Mode
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {interviewSchedule.map((interview) => (
-                  <TableRow key={interview.id} hover>
-                    <TableCell>
-                      <Typography sx={{ fontWeight: 700, color: "#244964" }}>
-                        {interview.candidateName}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: "#6b879c" }}>
-                        {interview.id}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{interview.role}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={interview.stage}
-                        size="small"
-                        sx={{
-                          bgcolor: "#eef7ff",
-                          color: "#1f80b6",
-                          fontWeight: 700,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>{interview.time}</TableCell>
-                    <TableCell>{interview.interviewer}</TableCell>
-                    <TableCell>{interview.mode}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Paper>
-      ) : null}
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
+            >
+              Applicants by Status
+            </Typography>
+            <PieChart
+              series={[
+                {
+                  data: applicantsByStatusData,
+                  innerRadius: "42%",
+                  outerRadius: "80%",
+                  paddingAngle: 2,
+                  cornerRadius: 3,
+                  arcLabel: "value",
+                  arcLabelMinAngle: 20,
+                },
+              ]}
+              colors={CATEGORICAL_COLORS}
+              height={pieChartHeight}
+              slotProps={pieLegendSlotProps}
+              sx={{
+                "& .MuiChartsArcLabel-root": {
+                  fill: "#ffffff",
+                  fontWeight: 700,
+                  fontSize: 12,
+                },
+              }}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
+            >
+              Weekly Application Volume
+            </Typography>
+            <LineChart
+              dataset={weeklyApplicationsTrend}
+              xAxis={[{ dataKey: "day", scaleType: "point" }]}
+              series={[
+                {
+                  dataKey: "applications",
+                  color: CATEGORICAL_COLORS[0],
+                  area: true,
+                  showMark: true,
+                },
+              ]}
+              height={220}
+              grid={{ horizontal: true }}
+              hideLegend
+            />
+          </Grid>
+        </Grid>
+      </CardContainer>
     </Box>
   );
 }

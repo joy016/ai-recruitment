@@ -38,3 +38,25 @@ export const formatRelativeTime = (value: string): string => {
 
   return "just now";
 };
+
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+/**
+ * Formats an ISO date string as "June 21, 2026, 8:05 AM". Falls back to the
+ * raw value if it can't be parsed.
+ */
+export const formatDateTime = (value: string): string => {
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  return dateTimeFormatter.format(parsedDate);
+};

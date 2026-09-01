@@ -1,16 +1,20 @@
-import { Button, Paper, Stack, Typography } from "@mui/material";
+import CardContainer from "@/app/component/CardContainer";
+import { Button, Stack, Typography } from "@mui/material";
 
-export default function CandidatesPage() {
+type CandidatesPageProps = {
+  searchParams: Promise<{ jobId?: string }>;
+};
+
+export default async function CandidatesPage({
+  searchParams,
+}: Readonly<CandidatesPageProps>) {
+  const { jobId } = await searchParams;
+  const profileHref = jobId
+    ? `/hr/candidates/profile?jobId=${jobId}`
+    : "/hr/candidates/profile";
+
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        p: { xs: 1.5, sm: 2.2, md: 3 },
-        borderRadius: 3,
-        border: "1px solid #d7e8f5",
-        backgroundColor: "#ffffff",
-      }}
-    >
+    <CardContainer>
       <Typography variant="h5" sx={{ fontWeight: 700, color: "#17456a" }}>
         Candidates
       </Typography>
@@ -19,7 +23,7 @@ export default function CandidatesPage() {
       </Typography>
       <Stack direction="row" sx={{ mt: 2.5 }}>
         <Button
-          href="/hr/candidates/profile"
+          href={profileHref}
           variant="contained"
           sx={{
             width: { xs: "100%", sm: "auto" },
@@ -35,6 +39,6 @@ export default function CandidatesPage() {
           Open Candidates Profile
         </Button>
       </Stack>
-    </Paper>
+    </CardContainer>
   );
 }

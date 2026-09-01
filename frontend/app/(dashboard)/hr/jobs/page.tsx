@@ -144,7 +144,7 @@ export default function JobsPage() {
     try {
       const response = await getAllJobs(statusFilter, pageNumber, pageSize);
       setJobPosts(response.data);
-      setTotalJobCount(response.applicantCount || 0);
+      setTotalJobCount(response.totalCount || 0);
     } catch (error) {
       console.error("Failed to fetch job posts:", error);
     } finally {
@@ -551,7 +551,7 @@ export default function JobsPage() {
                     sx={{ flexWrap: "wrap" }}
                   >
                     <Button
-                      href="/hr/candidates/profile"
+                      href={`/hr/candidates/profile?jobId=${jobPost.jobId}`}
                       variant="outlined"
                       size="small"
                       sx={{ textTransform: "none", borderRadius: 2 }}

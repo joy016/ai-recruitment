@@ -8,13 +8,18 @@ import {
   Button,
   CircularProgress,
   Container,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 
 import { createCandidate } from "@/lib/api/candidate";
+import { SOURCE_OF_APPLICATION } from "@/app/(constants)/job";
 
 const allowedResumeTypes = new Set([
   "application/pdf",
@@ -32,13 +37,14 @@ export default function ApplicationPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [yearsOfExperience, setYearsOfExperience] = useState("");
-  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resumeInputKey, setResumeInputKey] = useState(0);
+  const [portfolioUrl, setPortfolioUrl] = useState("");
+  const [sourceOfApplication, setSourceOfApplication] = useState("");
 
   const resolvedToken = routeParams.token || "N/A";
   const resolvedRole = useMemo(
@@ -78,7 +84,6 @@ export default function ApplicationPage() {
     setEmail("");
     setPhone("");
     setYearsOfExperience("");
-    setLinkedinUrl("");
     setCoverLetter("");
     setResumeFile(null);
     setResumeInputKey((key) => key + 1);
@@ -104,7 +109,8 @@ export default function ApplicationPage() {
         email,
         phoneNumber: phone,
         yearsOfExperience: Number(yearsOfExperience) || 0,
-        linkedInUrl: linkedinUrl,
+        portfolioUrl: portfolioUrl,
+        sourceOfApplication: sourceOfApplication,
         coverLetter,
         resume: resumeFile,
         role: resolvedRole,
@@ -229,14 +235,34 @@ export default function ApplicationPage() {
                   required
                   fullWidth
                 />
-                <TextField
-                  label="LinkedIn URL"
-                  type="url"
-                  value={linkedinUrl}
-                  onChange={(event) => setLinkedinUrl(event.target.value)}
-                  fullWidth
-                />
+                <FormControl variant="outlined" sx={{ m: 1, minWidth: 120 }}>
+                  <InputLabel id="demo-simple-select-outlined-label">
+                    Source of Application
+                  </InputLabel>
+                  <Select
+                    labelId="demo-simple-select-outlined-label"
+                    id="demo-simple-select-outlined"
+                    value={sourceOfApplication}
+                    onChange={(event) =>
+                      setSourceOfApplication(event.target.value)
+                    }
+                    label="Source of Application"
+                  >
+                    {SOURCE_OF_APPLICATION.map((source) => (
+                      <MenuItem key={source} value={source}>
+                        {source}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Box>
+              <TextField
+                label="Portfolio  URL"
+                type="url"
+                value={portfolioUrl}
+                onChange={(event) => setPortfolioUrl(event.target.value)}
+                fullWidth
+              />
 
               <TextField
                 label="Cover Letter"

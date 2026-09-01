@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Button,
   Dialog,
@@ -9,6 +10,8 @@ import {
   DialogTitle,
   Paper,
   SelectChangeEvent,
+  Snackbar,
+  Alert,
   TextField,
   Typography,
   useMediaQuery,
@@ -19,8 +22,10 @@ import {
   ApplicantStatusItem,
 } from "@/lib/api/applicant-status";
 import { Candidate } from "../(types)/candidates.types";
-import { getCandidateList } from "@/lib/api/candidate";
+import { getCandidateList, updateCandidateStatus } from "@/lib/api/candidate";
 import CandidateTable from "../(components)/CandidateTable";
+import { INITIAL_UPDATE_FORM } from "../(constants)/constants";
+import { UpdateStatusPayload } from "@/lib/types/candidate";
 
 const formatScheduleForDisplay = (value: string) => {
   if (!value) {
@@ -32,14 +37,35 @@ const formatScheduleForDisplay = (value: string) => {
     return value;
   }
 
-  return date.toLocaleString();
+  const datePart = date.toLocaleDateString("en-US");
+  const timePart = date
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .toLowerCase();
+
+  return `${datePart}, ${timePart}`;
 };
 
 export default function CandidateProfilePage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get("jobId") ?? undefined;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(true);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [lastJobId, setLastJobId] = useState(jobId);
+  const [form, setForm] = useState<UpdateStatusPayload>(INITIAL_UPDATE_FORM);
+
+  if (jobId !== lastJobId) {
+    setLastJobId(jobId);
+    setPageNumber(1);
+  }
   const [savedStatusByApplicantId, setSavedStatusByApplicantId] = useState<
     Record<string, number>
   >({});
@@ -70,6 +96,11 @@ export default function CandidateProfilePage() {
   const [draftScheduleByApplicantId, setDraftScheduleByApplicantId] = useState<
     Record<string, string>
   >({});
+
+  const [savingApplicantId, setSavingApplicantId] = useState<string | null>(
+    null,
+  );
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const getStatusName = (statusId: number | null) =>
     applicantStatuses.find((status) => status.statusId === statusId)
@@ -146,9 +177,11 @@ export default function CandidateProfilePage() {
 
   useEffect(() => {
     const fetchCandidates = async () => {
+      setIsLoadingCandidates(true);
       try {
-        const data = await getCandidateList();
-        setCandidates(data);
+        const response = await getCandidateList(jobId, pageNumber, pageSize);
+        setCandidates(response.data);
+        setTotalCount(response.totalCount);
       } catch (error) {
         console.error("Error fetching candidates:", error);
       } finally {
@@ -156,7 +189,16 @@ export default function CandidateProfilePage() {
       }
     };
     fetchCandidates();
-  }, []);
+  }, [jobId, pageNumber, pageSize]);
+
+  const handlePageChange = (_event: unknown, newPage: number) => {
+    setPageNumber(newPage + 1);
+  };
+
+  const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setPageSize(Number(event.target.value));
+    setPageNumber(1);
+  };
 
   useEffect(() => {
     if (candidates.length === 0) {
@@ -234,7 +276,7 @@ export default function CandidateProfilePage() {
     }
   };
 
-  const handleSaveStatus = (applicantId: string) => {
+  const handleSaveStatus = async (applicantId: string) => {
     const nextStatusId = draftStatusByApplicantId[applicantId];
 
     if (
@@ -248,15 +290,37 @@ export default function CandidateProfilePage() {
       return;
     }
 
-    setSavedStatusByApplicantId((current) => ({
-      ...current,
-      [applicantId]: draftStatusByApplicantId[applicantId],
-    }));
-    setSavedScheduleByApplicantId((current) => ({
-      ...current,
-      [applicantId]: draftScheduleByApplicantId[applicantId],
-    }));
-    setEditingApplicantId(null);
+    const draftSchedule = draftScheduleByApplicantId[applicantId] || "";
+    const nextSchedule = draftSchedule
+      ? new Date(draftSchedule).toISOString()
+      : draftSchedule;
+
+    setSavingApplicantId(applicantId);
+    setSaveError(null);
+
+    try {
+      await updateCandidateStatus({
+        id: applicantId,
+        applicantStatusId: nextStatusId,
+        interviewSched: nextSchedule,
+        updatedAt: new Date().toISOString(),
+      });
+
+      setSavedStatusByApplicantId((current) => ({
+        ...current,
+        [applicantId]: nextStatusId,
+      }));
+      setSavedScheduleByApplicantId((current) => ({
+        ...current,
+        [applicantId]: nextSchedule,
+      }));
+      setEditingApplicantId(null);
+    } catch (error) {
+      console.error("Error updating candidate status:", error);
+      setSaveError("Failed to update candidate status. Please try again.");
+    } finally {
+      setSavingApplicantId(null);
+    }
   };
 
   const handleCancelStatus = (applicantId: string) => {
@@ -340,10 +404,16 @@ export default function CandidateProfilePage() {
         savedScheduleByApplicantId={savedScheduleByApplicantId}
         applicantStatuses={applicantStatuses}
         formatScheduleForDisplay={formatScheduleForDisplay}
+        savingApplicantId={savingApplicantId}
         onStatusChange={handleStatusChange}
         onEditStatus={handleEditStatus}
         onSaveStatus={handleSaveStatus}
         onCancelStatus={handleCancelStatus}
+        pageNumber={pageNumber}
+        pageSize={pageSize}
+        totalCount={totalCount}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
       />
 
       <Dialog
@@ -383,6 +453,21 @@ export default function CandidateProfilePage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(saveError)}
+        autoHideDuration={5000}
+        onClose={() => setSaveError(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setSaveError(null)}
+          severity="error"
+          variant="filled"
+        >
+          {saveError}
+        </Alert>
+      </Snackbar>
     </Paper>
   );
 }

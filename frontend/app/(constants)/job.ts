@@ -8,6 +8,13 @@ export const FLOW_STEPS = [
   "AI Screening",
   "Candidates",
 ];
+export const SOURCE_OF_APPLICATION = [
+  "LinkedIn",
+  "Indeed",
+  "Company Website",
+  "Referral",
+  "Other",
+];
 
 export const JOBS_PAGE_SIZE = 10;
 export const JOBS_PAGE_SIZE_OPTIONS = [5, 10, 25, 50];

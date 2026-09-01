@@ -38,7 +38,7 @@ export interface InsertJobResponse {
 
 export interface GetAllJobsResponse {
   data: JobItem[];
-  applicantCount: number;
+  totalCount: number;
   pageNumber: number;
   pageSize: number;
   totalPage: number;

@@ -21,3 +21,29 @@ export interface Candidate {
   applicantStatusId: number;
   resumePath: string;
 }
+
+export interface GetCandidatesResponse {
+  status: number;
+  data: Candidate[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+}
+
+export interface NewCandidates {
+  candidateId: string;
+  candidateName: string;
+  position: string;
+  appliedDate: string;
+  workExperience: string;
+  applicationSource: string | null;
+}
+
+export interface GetNewCandidatesResponse {
+  data: NewCandidates[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+}
