@@ -4,9 +4,8 @@ services:
     runtime: docker
     plan: free
     region: singapore
-    rootDir: backend/ai-recruitment
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    dockerfilePath: backend/ai-recruitment/Dockerfile
+    dockerContext: backend/ai-recruitment
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
