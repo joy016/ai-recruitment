@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Button,
@@ -49,7 +49,7 @@ const formatScheduleForDisplay = (value: string) => {
   return `${datePart}, ${timePart}`;
 };
 
-export default function CandidateProfilePage() {
+function CandidateProfileContent() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const searchParams = useSearchParams();
@@ -469,5 +469,13 @@ export default function CandidateProfilePage() {
         </Alert>
       </Snackbar>
     </Paper>
+  );
+}
+
+export default function CandidateProfilePage() {
+  return (
+    <Suspense fallback={null}>
+      <CandidateProfileContent />
+    </Suspense>
   );
 }
