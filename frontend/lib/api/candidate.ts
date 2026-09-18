@@ -56,7 +56,7 @@ export const createCandidate = async (
   formData.append("Resume", payload.resume);
   formData.append("Role", payload.role ?? "");
   formData.append("JobId", payload.JobId.toString());
-
+  formData.append("SourceOfApplication", payload.sourceOfApplication ?? "");
   return api.post<Candidate, FormData>(CANDIDATES_ENDPOINT, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });

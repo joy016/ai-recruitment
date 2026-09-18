@@ -29,6 +29,13 @@ const allowedResumeTypes = new Set([
 
 const maxResumeSize = 5 * 1024 * 1024;
 
+const MAX_PHONE_DIGITS = 11;
+
+const formatPhoneNumber = (digits: string) => {
+  const parts = [digits.slice(0, 4), digits.slice(4, 7), digits.slice(7, 11)];
+  return parts.filter(Boolean).join(" - ");
+};
+
 export default function ApplicationPage() {
   const routeParams = useParams<{ token: string }>();
   const queryParams = useSearchParams();
@@ -72,6 +79,13 @@ export default function ApplicationPage() {
     return "";
   };
 
+  const handlePhoneChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = event.target.value
+      .replace(/\D/g, "")
+      .slice(0, MAX_PHONE_DIGITS);
+    setPhone(formatPhoneNumber(digits));
+  };
+
   const handleResumeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
     setResumeFile(file);
@@ -87,6 +101,7 @@ export default function ApplicationPage() {
     setCoverLetter("");
     setResumeFile(null);
     setResumeInputKey((key) => key + 1);
+    setSourceOfApplication("");
   };
 
   const handleSubmit = async (event: React.SyntheticEvent<HTMLFormElement>) => {
@@ -126,6 +141,8 @@ export default function ApplicationPage() {
       setIsSubmitting(false);
     }
   };
+
+  console.log(sourceOfApplication);
 
   return (
     <Box
@@ -213,9 +230,11 @@ export default function ApplicationPage() {
                 <TextField
                   label="Phone Number"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
+                  onChange={handlePhoneChange}
+                  placeholder="xxxx - xxx - xxxx"
                   required
                   fullWidth
+                  slotProps={{ htmlInput: { inputMode: "numeric" } }}
                 />
               </Box>
 

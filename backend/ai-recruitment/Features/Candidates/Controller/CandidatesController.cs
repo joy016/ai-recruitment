@@ -277,6 +277,7 @@ namespace ai_recruitment.Features.Candidates.controller
             var candidates = await query
                 .Skip((pageNumber.GetValueOrDefault(1) - 1) * pageSize.GetValueOrDefault(10))
                 .Take(pageSize.GetValueOrDefault(10))
+                .OrderByDescending(c => c.CreatedAt)
                 .Select(c => new CandidateListDto
                 {
                     Id = c.Id,

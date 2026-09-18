@@ -1,7 +1,7 @@
 ﻿using ai_recruitment.Features.Candidates.model;
 using System.ComponentModel.DataAnnotations;
 
-namespace ai_recruitment.Features.ApplicationStatuses
+namespace ai_recruitment.Features.ApplicationStatuses.Model
 {
     public class ApplicantStatus
     {

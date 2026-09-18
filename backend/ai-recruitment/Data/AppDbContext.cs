@@ -1,4 +1,4 @@
-﻿using ai_recruitment.Features.ApplicationStatuses;
+﻿using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.JobPosts.Model;
 using Microsoft.EntityFrameworkCore;

@@ -60,7 +60,7 @@ export default function CandidateProfilePage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
   const [lastJobId, setLastJobId] = useState(jobId);
-  const [form, setForm] = useState<UpdateStatusPayload>(INITIAL_UPDATE_FORM);
+  // const [form, setForm] = useState<UpdateStatusPayload>(INITIAL_UPDATE_FORM);
 
   if (jobId !== lastJobId) {
     setLastJobId(jobId);

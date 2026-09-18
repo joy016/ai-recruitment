@@ -1,6 +1,6 @@
 using System;
 
-namespace ai_recruitment.Features.ApplicationStatuses
+namespace ai_recruitment.Features.ApplicationStatuses.Dto
 {
     public class ApplicantStatusDto
     {

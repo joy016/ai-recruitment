@@ -16,7 +16,10 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 COPY --from=build /app ./
 
-# Program.cs binds to $PORT when Railway provides it; this is the local default.
+# Program.cs reads the PORT env var (which Render injects automatically) and
+# rebinds Kestrel to it at startup, overriding ASPNETCORE_URLS below. These
+# two lines are just a fallback for running the image outside Render
+# (e.g. `docker run`) without a PORT variable set.
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
 EXPOSE 8080

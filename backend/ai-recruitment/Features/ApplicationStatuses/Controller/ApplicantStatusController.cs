@@ -1,11 +1,12 @@
 ﻿using ai_recruitment.Data;
+using ai_recruitment.Features.ApplicationStatuses.Dto;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace ai_recruitment.Features.ApplicationStatuses
+namespace ai_recruitment.Features.ApplicationStatuses.Controller
 {
     [ApiController]
     [Route("api/[controller]")]
@@ -38,5 +39,27 @@ namespace ai_recruitment.Features.ApplicationStatuses
 
             return Ok(statuses);
         }
+
+        [HttpGet("interview")]
+        public async Task<ActionResult<List<CandidateForInterviewDto>>> GetCandidatesForInterviewToday() {
+            var todayStartUtc = DateTime.UtcNow.Date;
+            var todayEndUtc = todayStartUtc.AddDays(1);
+            var candidates = await _context.Candidates
+              .Where(c => c.InterviewSched.HasValue
+                 && c.InterviewSched.Value >= todayStartUtc
+                 && c.InterviewSched.Value < todayEndUtc)
+              .Select(c => new CandidateForInterviewDto
+                 {
+                     Id = c.Id,
+                     FirstName = c.FirstName,
+                     LastName = c.LastName,
+                     InterviewSched = c.InterviewSched.Value
+                     // map remaining DTO fields here
+                 })
+                 .ToListAsync();
+                    
+             return Ok(candidates);
+
+            }
     }
 }
