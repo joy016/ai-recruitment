@@ -177,7 +177,7 @@ namespace ai_recruitment.Features.Candidates.controller
                     streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
 
                     // 'resume' is the required multipart field name
-                    form.Add(streamContent, "resume", candidate.ResumeFileName);
+                    form.Add(streamContent, "resume", candidate.ResumeFileName!);
 
                     // Post the multipart form
                     HttpResponseMessage response;

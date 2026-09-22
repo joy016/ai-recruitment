@@ -53,7 +53,7 @@ namespace ai_recruitment.Features.ApplicationStatuses.Controller
                      Id = c.Id,
                      FirstName = c.FirstName,
                      LastName = c.LastName,
-                     InterviewSched = c.InterviewSched.Value
+                     InterviewSched = c.InterviewSched!.Value
                      // map remaining DTO fields here
                  })
                  .ToListAsync();

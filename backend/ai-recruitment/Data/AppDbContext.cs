@@ -1,6 +1,9 @@
 ﻿using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.JobPosts.Model;
+using ai_recruitment.Features.Permissions.Model;
+using ai_recruitment.Features.Roles.Model;
+using ai_recruitment.Features.Users.Model;
 using Microsoft.EntityFrameworkCore;
 
 namespace ai_recruitment.Data
@@ -19,6 +22,9 @@ namespace ai_recruitment.Data
        public DbSet<Candidate> Candidates => Set<Candidate>();
        public DbSet<ApplicantStatus> ApplicantStatuses => Set<ApplicantStatus>();
        public DbSet<Job> Jobs => Set<Job>();
+       public DbSet<User> Users => Set<User>();
+       public DbSet<Role> Roles => Set<Role>();
+       public DbSet<Permission> Permissions => Set<Permission>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,6 +43,28 @@ namespace ai_recruitment.Data
               .WithMany(j => j.Candidates)
              .HasForeignKey(j => j.JobId);
 
+            // one Role -> many Users
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Role)
+                .WithMany(r => r.Users)
+                .HasForeignKey(u => u.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // one Role -> many Permissions
+            modelBuilder.Entity<Permission>()
+                .HasOne(p => p.Role)
+                .WithMany(r => r.Permissions)
+                .HasForeignKey(p => p.RoleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            modelBuilder.Entity<Role>()
+                .HasIndex(r => r.RoleName)
+                .IsUnique();
+
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(
                 new ApplicantStatus { StatusId = 1, StatusName = "Application Submitted", Description = "Candidate submitted application", Color = "#3B82F6", SortOrder = 1, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
@@ -51,6 +79,10 @@ namespace ai_recruitment.Data
                 new ApplicantStatus { StatusId = 10, StatusName = "Offered", Description = "Job offer has been formally extended to the candidate", Color = "#22C55E", SortOrder = 9, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
                 new ApplicantStatus { StatusId = 11, StatusName = "Rejected", Description = "Candidate was rejected during the recruitment process", Color = "#EF4444", SortOrder = 10, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
             );
+
+            // seed a bootstrap admin user so the (now [Authorize]-protected) Users/Roles/Permissions
+            // endpoints can be reached at least once to create real accounts.
+            // Default credentials: admin@ai-recruitment.local / Admin@12345 - change immediately after first login.
             }
     }
 }

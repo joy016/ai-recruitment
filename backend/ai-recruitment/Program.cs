@@ -17,11 +17,19 @@ if (!string.IsNullOrEmpty(renderPort))
 
 // Add services to the container.
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(ResolveConnectionString(builder)));
+
+//var jwtKey = ResolveJwtSigningKey(builder);
+//var jwtIssuer = builder.Configuration["Jwt:Issuer"]
+//    ?? throw new InvalidOperationException("Jwt:Issuer is missing from configuration.");
+//var jwtAudience = builder.Configuration["Jwt:Audience"]
+//    ?? throw new InvalidOperationException("Jwt:Audience is missing from configuration.");
+
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddCors(options =>
 {
@@ -101,6 +109,7 @@ app.UseStaticFiles();
 // Enable CORS using the named policy
 app.UseCors("AllowFrontend");
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Used by Render's health check to detect a successful deploy.
@@ -127,6 +136,21 @@ static string ResolveConnectionString(WebApplicationBuilder builder)
 
     return ConvertDatabaseUrlToNpgsqlConnectionString(databaseUrl);
 }
+
+// Development -> Jwt:Key (appsettings.Development.json) -> a fixed local dev secret.
+// Production  -> JWT_SECRET environment variable          -> a real, per-deployment secret.
+//static string ResolveJwtSigningKey(WebApplicationBuilder builder)
+//{
+//    if (builder.Environment.IsDevelopment())
+//    {
+//        return builder.Configuration["Jwt:Key"]
+//            ?? throw new InvalidOperationException("Jwt:Key is missing from appsettings.Development.json.");
+//    }
+
+//    return builder.Configuration["JWT_SECRET"]
+//        ?? throw new InvalidOperationException(
+//            "JWT_SECRET environment variable is required when ASPNETCORE_ENVIRONMENT=Production.");
+//}
 
 // Supabase (and most hosted Postgres providers) hand out connection info as a
 // postgresql:// URI. Npgsql does not accept that format directly - it only
