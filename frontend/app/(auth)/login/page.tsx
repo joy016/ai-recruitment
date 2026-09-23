@@ -2,9 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import {
+  Alert,
   Box,
   Button,
+  CircularProgress,
   Container,
   IconButton,
   InputAdornment,
@@ -13,16 +16,51 @@ import {
   Typography,
 } from "@mui/material";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { login } from "@/lib/api/auth";
+import { setToken } from "@/lib/utils/token";
+
+const describeLoginError = (error: unknown) => {
+  if (axios.isAxiosError<{ title?: string; message?: string }>(error)) {
+    if (!error.response) {
+      return "Unable to reach the server. Please check your connection and try again.";
+    }
+
+    if (error.response.status === 401) {
+      return "Invalid email or password.";
+    }
+
+    return (
+      error.response.data?.title ??
+      error.response.data?.message ??
+      "Login failed. Please try again."
+    );
+  }
+
+  return "Login failed. Please try again.";
+};
 
 export default function LoginPage() {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState("");
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    router.push("/hr/dashboard");
+    setLoginError("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await login({ email, password });
+      setToken(response.token);
+      router.push("/hr/dashboard");
+    } catch (error) {
+      console.error("Login failed:", error);
+      setLoginError(describeLoginError(error));
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -69,6 +107,11 @@ export default function LoginPage() {
             noValidate
             sx={{ mt: 3 }}
           >
+            {loginError && (
+              <Alert severity="error" sx={{ mb: 2.5 }}>
+                {loginError}
+              </Alert>
+            )}
             <TextField
               fullWidth
               label="Email"
@@ -77,6 +120,7 @@ export default function LoginPage() {
               onChange={(event) => setEmail(event.target.value)}
               required
               autoComplete="email"
+              disabled={isSubmitting}
               sx={{ mb: 2.5 }}
             />
             <TextField
@@ -87,6 +131,7 @@ export default function LoginPage() {
               onChange={(event) => setPassword(event.target.value)}
               required
               autoComplete="current-password"
+              disabled={isSubmitting}
               sx={{ mb: 3.5 }}
               slotProps={{
                 input: {
@@ -111,6 +156,12 @@ export default function LoginPage() {
               fullWidth
               variant="contained"
               size="large"
+              disabled={isSubmitting}
+              startIcon={
+                isSubmitting ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : undefined
+              }
               sx={{
                 borderRadius: 3,
                 py: 1.4,
@@ -125,7 +176,7 @@ export default function LoginPage() {
                 },
               }}
             >
-              Login
+              {isSubmitting ? "Signing in..." : "Login"}
             </Button>
           </Box>
         </Paper>

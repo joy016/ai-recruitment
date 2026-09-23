@@ -38,3 +38,4 @@ Thumbs.db
 
 # ---- Runtime uploads ----
 backend/ai-recruitment/wwwroot/uploads/
+/backend/ai-recruitment/BearerSecuritySchemeTransformer.cs

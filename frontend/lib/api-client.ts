@@ -6,6 +6,8 @@ import axios, {
   InternalAxiosRequestConfig,
 } from "axios";
 
+import { clearToken, getToken } from "@/lib/utils/token";
+
 type TokenGetter = () => string | null | undefined;
 
 type ApiClientHooks = {
@@ -116,7 +118,15 @@ export const createApiClient = (
   return instance;
 };
 
-export const apiClient = createApiClient();
+export const apiClient = createApiClient({
+  getAccessToken: getToken,
+  onUnauthorized: () => {
+    clearToken();
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+  },
+});
 
 export const api = {
   get: async <TResponse>(

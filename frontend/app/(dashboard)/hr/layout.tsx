@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { clearToken } from "@/lib/utils/token";
 import {
   AppBar,
+  Avatar,
   Badge,
   Box,
   Chip,
@@ -17,6 +19,8 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Menu as MuiMenu,
+  MenuItem,
   Toolbar,
   Typography,
   useMediaQuery,
@@ -28,8 +32,11 @@ import {
   Dashboard,
   Description,
   Group,
+  Logout,
+  ManageAccounts,
   Menu,
   NotificationsNone,
+  PersonOutlined,
   Schedule,
   Settings,
   WarningAmber,
@@ -41,6 +48,7 @@ const navItems = [
   { label: "Dashboard", href: "/hr/dashboard", icon: <Dashboard /> },
   { label: "Candidates", href: "/hr/candidates", icon: <Group /> },
   { label: "Job Posts", href: "/hr/jobs", icon: <Description /> },
+  { label: "Accounts", href: "/hr/accounts", icon: <ManageAccounts /> },
   { label: "Settings", href: "/hr/settings", icon: <Settings /> },
 ];
 
@@ -95,8 +103,14 @@ const getNotificationAccent = (type: NotificationType) => {
 
 export default function HrLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [accountAnchorEl, setAccountAnchorEl] = useState<null | HTMLElement>(
+    null,
+  );
+  const accountMenuOpen = Boolean(accountAnchorEl);
+  const closeAccountMenu = () => setAccountAnchorEl(null);
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
   const unreadNotifications = recruiterNotifications.filter(
@@ -204,6 +218,76 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
                 <NotificationsNone />
               </Badge>
             </IconButton>
+            <Box
+              onMouseEnter={(event) =>
+                setAccountAnchorEl(event.currentTarget)
+              }
+              onMouseLeave={closeAccountMenu}
+              sx={{ display: "inline-flex", ml: 1 }}
+            >
+              <IconButton
+                aria-label="Account menu"
+                aria-controls={accountMenuOpen ? "account-menu" : undefined}
+                aria-haspopup="true"
+                onClick={(event) => setAccountAnchorEl(event.currentTarget)}
+                sx={{ p: 0.4 }}
+              >
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    bgcolor: "#1f80b6",
+                    fontSize: "0.95rem",
+                    fontWeight: 700,
+                  }}
+                >
+                  HR
+                </Avatar>
+              </IconButton>
+
+              <MuiMenu
+                id="account-menu"
+                anchorEl={accountAnchorEl}
+                open={accountMenuOpen}
+                onClose={closeAccountMenu}
+                disableRestoreFocus
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                slotProps={{
+                  list: {
+                    onMouseLeave: closeAccountMenu,
+                    sx: { minWidth: 180 },
+                  },
+                  paper: { sx: { pointerEvents: "auto" } },
+                }}
+                sx={{ pointerEvents: "none" }}
+              >
+                <MenuItem
+                  onClick={() => {
+                    closeAccountMenu();
+                    router.push("/hr/settings");
+                  }}
+                >
+                  <ListItemIcon>
+                    <PersonOutlined fontSize="small" />
+                  </ListItemIcon>
+                  My Account
+                </MenuItem>
+                <Divider />
+                <MenuItem
+                  onClick={() => {
+                    closeAccountMenu();
+                    clearToken();
+                    router.push("/login");
+                  }}
+                >
+                  <ListItemIcon>
+                    <Logout fontSize="small" />
+                  </ListItemIcon>
+                  Logout
+                </MenuItem>
+              </MuiMenu>
+            </Box>
           </Box>
         </Toolbar>
       </AppBar>
