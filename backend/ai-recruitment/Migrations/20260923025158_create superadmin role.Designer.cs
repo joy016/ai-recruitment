@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ai_recruitment.Data;
@@ -11,9 +12,11 @@ using ai_recruitment.Data;
 namespace ai_recruitment.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260923025158_create superadmin role")]
+    partial class createsuperadminrole
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -424,38 +427,6 @@ namespace ai_recruitment.Migrations
                             Description = "Full system access",
                             IsActive = true,
                             RoleName = "Super Admin"
-                        },
-                        new
-                        {
-                            RoleId = 2,
-                            CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Manage recruitment operations",
-                            IsActive = true,
-                            RoleName = "HR Admin"
-                        },
-                        new
-                        {
-                            RoleId = 3,
-                            CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Manage recruitment",
-                            IsActive = true,
-                            RoleName = "Recruiter"
-                        },
-                        new
-                        {
-                            RoleId = 4,
-                            CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Manage assigned jobs and candidates",
-                            IsActive = true,
-                            RoleName = "Hiring Manager"
-                        },
-                        new
-                        {
-                            RoleId = 5,
-                            CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Description = "Manage interviews",
-                            IsActive = true,
-                            RoleName = "Interviewer"
                         });
                 });
 
@@ -517,20 +488,6 @@ namespace ai_recruitment.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("Users");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                            CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Email = "joy.developer@ai-recruitment.local",
-                            FirstName = "Joy",
-                            InsertedBy = "system-seed",
-                            IsActive = true,
-                            LastName = "Developer",
-                            PasswordHash = "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==",
-                            RoleId = 1
-                        });
                 });
 
             modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Candidate", b =>

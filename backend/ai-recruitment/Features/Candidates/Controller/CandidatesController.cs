@@ -31,7 +31,7 @@ namespace ai_recruitment.Features.Candidates.controller
             _configuration = configuration;
             _logger = logger;
         }
-     
+
 
         [HttpPost]
         [Consumes("multipart/form-data")]

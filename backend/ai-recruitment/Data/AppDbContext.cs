@@ -18,13 +18,13 @@ namespace ai_recruitment.Data
         }
         // Define your DbSets here
         // public DbSet<YourEntity> YourEntities { get; set; }
-       // public DbSet<Product> Products => Set<Product>();   --- sample 
-       public DbSet<Candidate> Candidates => Set<Candidate>();
-       public DbSet<ApplicantStatus> ApplicantStatuses => Set<ApplicantStatus>();
-       public DbSet<Job> Jobs => Set<Job>();
-       public DbSet<User> Users => Set<User>();
-       public DbSet<Role> Roles => Set<Role>();
-       public DbSet<Permission> Permissions => Set<Permission>();
+        // public DbSet<Product> Products => Set<Product>();   --- sample 
+        public DbSet<Candidate> Candidates => Set<Candidate>();
+        public DbSet<ApplicantStatus> ApplicantStatuses => Set<ApplicantStatus>();
+        public DbSet<Job> Jobs => Set<Job>();
+        public DbSet<User> Users => Set<User>();
+        public DbSet<Role> Roles => Set<Role>();
+        public DbSet<Permission> Permissions => Set<Permission>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -80,9 +80,59 @@ namespace ai_recruitment.Data
                 new ApplicantStatus { StatusId = 11, StatusName = "Rejected", Description = "Candidate was rejected during the recruitment process", Color = "#EF4444", SortOrder = 10, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) }
             );
 
+            //seed roles
+            modelBuilder.Entity<Role>().HasData(
+                new Role { RoleId = 1, RoleName = "Super Admin", Description = "Full system access", CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc) },
+                new Role
+                {
+                    RoleId = 2,
+                    RoleName = "HR Admin",
+                    Description = "Manage recruitment operations",
+                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
+                },
+                    new Role
+                    {
+                        RoleId = 3,
+                        RoleName = "Recruiter",
+                        Description = "Manage recruitment",
+                        CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
+                    },
+    new Role
+    {
+        RoleId = 4,
+        RoleName = "Hiring Manager",
+        Description = "Manage assigned jobs and candidates",
+        CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
+    },
+    new Role
+    {
+        RoleId = 5,
+        RoleName = "Interviewer",
+        Description = "Manage interviews",
+        CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
+    }
+                );
+
             // seed a bootstrap admin user so the (now [Authorize]-protected) Users/Roles/Permissions
             // endpoints can be reached at least once to create real accounts.
             // Default credentials: admin@ai-recruitment.local / Admin@12345 - change immediately after first login.
-            }
+
+            // dummy dev account for testing the login route locally.
+            // Credentials: joy.developer@ai-recruitment.local / Dev@12345
+            modelBuilder.Entity<User>().HasData(
+                new User
+                {
+                    Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                    FirstName = "Joy",
+                    LastName = "Developer",
+                    Email = "joy.developer@ai-recruitment.local",
+                    PasswordHash = "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==",
+                    InsertedBy = "system-seed",
+                    IsActive = true,
+                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                    RoleId = 1
+                }
+            );
+        }
     }
 }

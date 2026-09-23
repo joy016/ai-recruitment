@@ -10,7 +10,7 @@ namespace ai_recruitment.Features.Candidates.Dto
 
         [Required]
         [MaxLength(100)]
-        public string LastName { get; set; } = string.Empty;    
+        public string LastName { get; set; } = string.Empty;
 
         [Required]
         [EmailAddress]

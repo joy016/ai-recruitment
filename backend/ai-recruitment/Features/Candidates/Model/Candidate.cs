@@ -34,8 +34,8 @@ namespace ai_recruitment.Features.Candidates.model
 
         public string? SourcOfApplication { get; set; }
 
-        public int JobId { get; set; }        
-        public Job Job { get; set; } = null!;  
+        public int JobId { get; set; }
+        public Job Job { get; set; } = null!;
 
     }
 }

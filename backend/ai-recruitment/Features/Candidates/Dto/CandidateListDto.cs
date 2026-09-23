@@ -8,7 +8,7 @@
         public required string LastName { get; set; }
         public DateTime ApplicationDate { get; set; }
 
-        public string?  YearsOfExperience { get; set; }
+        public string? YearsOfExperience { get; set; }
         public DateTime? InterviewSched { get; set; }
         public required int ApplicantStatusId { get; set; }
         public string? ResumePath { get; set; }

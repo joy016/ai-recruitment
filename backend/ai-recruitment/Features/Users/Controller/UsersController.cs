@@ -102,7 +102,7 @@ namespace ai_recruitment.Features.Users.Controller
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId,
                     RoleName = u.Role.RoleName
-                })
+                })                  
                 .ToListAsync();
 
             return Ok(new

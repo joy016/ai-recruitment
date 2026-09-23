@@ -43,7 +43,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
                 Department = jobDto.Department,
                 JobDescription = jobDto.JobDescription,
                 Qualifications = jobDto.Qualifications,
-                TechSkills = jobDto.TechSkills, 
+                TechSkills = jobDto.TechSkills,
             };
 
             _context.Jobs.Add(createdJob);
@@ -61,11 +61,11 @@ namespace ai_recruitment.Features.JobPosts.Controller
         [HttpGet("getAllJob")]
         public async Task<IActionResult> GetAllJobs([FromQuery] string jobStatus, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-           
+
 
             var query = _context.Jobs.AsQueryable();
 
-            if(jobStatus != "All")
+            if (jobStatus != "All")
             {
                 query = query.Where(j => j.JobStatus == jobStatus);
             }
@@ -83,7 +83,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
                     CreatedAt = j.CreatedAt,
                     Department = j.Department,
                     ApplicantCount = j.Candidates.Count(),
-                
+
                 })
                 .ToListAsync();
 
@@ -125,7 +125,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
                 Location = job.Location,
                 CreatedAt = job.CreatedAt
             };
-                
+
             return Ok(jobDto);
         }
 

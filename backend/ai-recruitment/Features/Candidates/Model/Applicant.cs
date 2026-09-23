@@ -6,7 +6,7 @@ namespace ai_recruitment.Features.Candidates.model
     public class Applicant
     {
         public Guid Id { get; set; }
-      
+
         public required string EmailAddress { get; set; }
         public required string FirstName { get; set; }
         public required string LastName { get; set; }
@@ -30,7 +30,7 @@ namespace ai_recruitment.Features.Candidates.model
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime? UpdatedAt { get; set; }
-      
+
 
 
     }

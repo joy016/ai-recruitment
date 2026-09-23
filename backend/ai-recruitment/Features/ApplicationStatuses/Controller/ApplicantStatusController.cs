@@ -41,7 +41,8 @@ namespace ai_recruitment.Features.ApplicationStatuses.Controller
         }
 
         [HttpGet("interview")]
-        public async Task<ActionResult<List<CandidateForInterviewDto>>> GetCandidatesForInterviewToday() {
+        public async Task<ActionResult<List<CandidateForInterviewDto>>> GetCandidatesForInterviewToday()
+        {
             var todayStartUtc = DateTime.UtcNow.Date;
             var todayEndUtc = todayStartUtc.AddDays(1);
             var candidates = await _context.Candidates
@@ -49,17 +50,17 @@ namespace ai_recruitment.Features.ApplicationStatuses.Controller
                  && c.InterviewSched.Value >= todayStartUtc
                  && c.InterviewSched.Value < todayEndUtc)
               .Select(c => new CandidateForInterviewDto
-                 {
-                     Id = c.Id,
-                     FirstName = c.FirstName,
-                     LastName = c.LastName,
-                     InterviewSched = c.InterviewSched!.Value
-                     // map remaining DTO fields here
-                 })
+              {
+                  Id = c.Id,
+                  FirstName = c.FirstName,
+                  LastName = c.LastName,
+                  InterviewSched = c.InterviewSched!.Value
+                  // map remaining DTO fields here
+              })
                  .ToListAsync();
-                    
-             return Ok(candidates);
 
-            }
+            return Ok(candidates);
+
+        }
     }
 }

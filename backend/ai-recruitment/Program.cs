@@ -1,7 +1,11 @@
 using ai_recruitment.Data;
+using ai_recruitment.Service;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +13,10 @@ var builder = WebApplication.CreateBuilder(args);
 // app to bind to 0.0.0.0 on that port. Locally (Development/Production
 // simulation) PORT is not set, so launchSettings.json / Dockerfile defaults
 // are left untouched.
+var jwtSettings = builder.Configuration.GetSection("Jwt");
+var key = Encoding.UTF8.GetBytes(jwtSettings["Key"]!);
+
+
 var renderPort = Environment.GetEnvironmentVariable("PORT");
 if (!string.IsNullOrEmpty(renderPort))
 {
@@ -17,19 +25,38 @@ if (!string.IsNullOrEmpty(renderPort))
 
 // Add services to the container.
 builder.Services.AddControllers();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+});
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(ResolveConnectionString(builder)));
 
-//var jwtKey = ResolveJwtSigningKey(builder);
-//var jwtIssuer = builder.Configuration["Jwt:Issuer"]
-//    ?? throw new InvalidOperationException("Jwt:Issuer is missing from configuration.");
-//var jwtAudience = builder.Configuration["Jwt:Audience"]
-//    ?? throw new InvalidOperationException("Jwt:Audience is missing from configuration.");
 
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"],
+        ValidAudience = jwtSettings["Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(key),
+        ClockSkew = TimeSpan.Zero // optional: remove default 5 min leeway
+    };
+});
 
 builder.Services.AddAuthorization();
+builder.Services.AddControllers();
+builder.Services.AddScoped<ITokenService, TokenService>();
 
 builder.Services.AddCors(options =>
 {

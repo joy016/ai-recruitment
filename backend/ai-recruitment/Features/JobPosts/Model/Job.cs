@@ -5,7 +5,7 @@ namespace ai_recruitment.Features.JobPosts.Model
 {
     public class Job
     {
-        [Key] 
+        [Key]
         public int JobId { get; set; }
         public required string JobTitle { get; set; }
         public required string Location { get; set; }

@@ -10,6 +10,6 @@
         public required string JobDescription { get; set; }
         public required string[] Qualifications { get; set; }
         public required string[] TechSkills { get; set; }
-      
+
     }
 }
