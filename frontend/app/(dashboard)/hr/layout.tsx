@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearToken } from "@/lib/utils/token";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { clearUser } from "@/lib/store/features/userSlice";
 import {
   AppBar,
   Avatar,
@@ -104,6 +106,11 @@ const getNotificationAccent = (type: NotificationType) => {
 export default function HrLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const dispatch = useAppDispatch();
+  const currentUser = useAppSelector((state) => state.user.currentUser);
+  const userInitials = currentUser
+    ? `${currentUser.firstName.charAt(0)}${currentUser.lastName.charAt(0)}`.toUpperCase()
+    : "HR";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [accountAnchorEl, setAccountAnchorEl] = useState<null | HTMLElement>(
@@ -241,7 +248,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
                     fontWeight: 700,
                   }}
                 >
-                  HR
+                  {userInitials}
                 </Avatar>
               </IconButton>
 
@@ -278,6 +285,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => {
                     closeAccountMenu();
                     clearToken();
+                    dispatch(clearUser());
                     router.push("/login");
                   }}
                 >

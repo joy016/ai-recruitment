@@ -18,6 +18,8 @@ import {
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { login } from "@/lib/api/auth";
 import { setToken } from "@/lib/utils/token";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { setUser } from "@/lib/store/features/userSlice";
 
 const describeLoginError = (error: unknown) => {
   if (axios.isAxiosError<{ title?: string; message?: string }>(error)) {
@@ -41,6 +43,7 @@ const describeLoginError = (error: unknown) => {
 
 export default function LoginPage() {
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,6 +58,7 @@ export default function LoginPage() {
     try {
       const response = await login({ email, password });
       setToken(response.token);
+      dispatch(setUser(response.user));
       router.push("/hr/dashboard");
     } catch (error) {
       console.error("Login failed:", error);
