@@ -59,10 +59,12 @@ export default function SettingsNavigation({
         scrollButtons={isDesktop ? false : "auto"}
         allowScrollButtonsMobile
         textColor="inherit"
-        TabIndicatorProps={{
-          sx: isDesktop
-            ? { left: 0, width: 3, borderRadius: 2, bgcolor: "#1f80b6" }
-            : { bgcolor: "#1f80b6", height: 3, borderRadius: 2 },
+        slotProps={{
+          indicator: {
+            sx: isDesktop
+              ? { left: 0, width: 3, borderRadius: 2, bgcolor: "#1f80b6" }
+              : { bgcolor: "#1f80b6", height: 3, borderRadius: 2 },
+          },
         }}
         sx={{
           "& .MuiTab-root": {

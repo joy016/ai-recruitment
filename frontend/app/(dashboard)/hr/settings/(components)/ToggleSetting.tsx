@@ -22,7 +22,7 @@ export default function ToggleSetting({
         <Switch
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
-          inputProps={{ "aria-label": title }}
+          slotProps={{ input: { "aria-label": title } }}
         />
       }
     />
