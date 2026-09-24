@@ -19,17 +19,18 @@ import {
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
-import {
-  ACCOUNT_ROLES,
-  generateUniqueAccountEmail,
-} from "../(constants)/constants";
-import { AccountFormValues, AccountRole } from "../(types)/account.types";
+import { generateUniqueAccountEmail } from "../(constants)/constants";
+import { AccountFormValues, Role } from "../(types)/account.types";
+import { insertUser } from "@/lib/api/user";
+import { capitalizeFirstLetter } from "@/utils/capitalize-letter";
+import { DEFAULT_PASSWORD } from "@/constant/default-pass";
+import { useAppSelector } from "@/lib/store/hooks";
 
 const emptyAccountForm: AccountFormValues = {
   firstName: "",
   lastName: "",
   email: "",
-  role: "Recruiter",
+  role: { roleId: 0, roleName: "" },
 };
 
 type AccountModalFormProps = {
@@ -40,6 +41,7 @@ type AccountModalFormProps = {
   existingEmails: string[];
   onClose: () => void;
   onSubmit: (values: AccountFormValues) => void;
+  roles: Role[];
 };
 
 export default function AccountModalForm({
@@ -49,14 +51,17 @@ export default function AccountModalForm({
   existingEmails,
   onClose,
   onSubmit,
+  roles,
 }: Readonly<AccountModalFormProps>) {
   const [accountForm, setAccountForm] = useState<AccountFormValues>(
     () => initialValues ?? emptyAccountForm,
   );
   const [formError, setFormError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [pendingValues, setPendingValues] =
-    useState<AccountFormValues | null>(null);
+  const [pendingValues, setPendingValues] = useState<AccountFormValues | null>(
+    null,
+  );
+  const currentUser = useAppSelector((state) => state.user.currentUser);
 
   const handleNameChange = (field: "firstName" | "lastName", value: string) => {
     setAccountForm((current) => {
@@ -72,7 +77,7 @@ export default function AccountModalForm({
     });
   };
 
-  const handleRequestSubmit = () => {
+  const handleRequestSubmit = async () => {
     if (!accountForm.firstName.trim() || !accountForm.lastName.trim()) {
       setFormError("First name and last name are required.");
       return;
@@ -80,6 +85,11 @@ export default function AccountModalForm({
 
     if (!accountForm.email) {
       setFormError("Unable to generate email. Please check the name fields.");
+      return;
+    }
+
+    if (!accountForm.role.roleId) {
+      setFormError("Please select a role.");
       return;
     }
 
@@ -99,10 +109,20 @@ export default function AccountModalForm({
     setPendingValues(null);
   };
 
-  const handleConfirmSave = () => {
+  const handleConfirmSave = async () => {
     if (!pendingValues) {
       return;
     }
+    const userPayload = {
+      firstName: capitalizeFirstLetter(accountForm.firstName),
+      lastName: capitalizeFirstLetter(accountForm.firstName),
+      email: accountForm.email,
+      password: DEFAULT_PASSWORD,
+      insertedBy: currentUser?.firstName! + currentUser?.lastName!,
+      roleId: accountForm.role.roleId,
+    };
+
+    const res = await insertUser(userPayload);
 
     onSubmit(pendingValues);
     setPendingValues(null);
@@ -189,18 +209,29 @@ export default function AccountModalForm({
             </Typography>
             <Select
               size="small"
-              value={accountForm.role}
-              onChange={(event) =>
+              value={accountForm.role.roleId || ""}
+              onChange={(event) => {
+                const selectedRoleId = Number(event.target.value);
+                const selectedRole = roles.find(
+                  (role) => role.roleId === selectedRoleId,
+                );
+                if (!selectedRole) {
+                  return;
+                }
+
                 setAccountForm((current) => ({
                   ...current,
-                  role: event.target.value as AccountRole,
-                }))
-              }
+                  role: {
+                    roleId: selectedRole.roleId,
+                    roleName: selectedRole.roleName,
+                  },
+                }));
+              }}
               fullWidth
             >
-              {ACCOUNT_ROLES.map((role) => (
-                <MenuItem key={role} value={role}>
-                  {role}
+              {roles.map((role) => (
+                <MenuItem key={role.roleId} value={role.roleId}>
+                  {role.roleName}
                 </MenuItem>
               ))}
             </Select>
@@ -208,8 +239,8 @@ export default function AccountModalForm({
 
           {!isEditing && (
             <Alert severity="info">
-              A default password will be set for this account. The user will
-              be required to reset it on first login.
+              A default password will be set for this account. The user will be
+              required to reset it on first login.
             </Alert>
           )}
 

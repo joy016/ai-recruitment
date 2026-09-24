@@ -12,9 +12,24 @@ export type Account = {
   createdAt: string;
 };
 
+export type SelectedRole = {
+  roleId: number;
+  roleName: string;
+};
+
 export type AccountFormValues = {
   firstName: string;
   lastName: string;
   email: string;
-  role: AccountRole;
+  role: SelectedRole;
+};
+
+export type Role = {
+  roleId: number;
+  roleName: string;
+  description: string;
+  isActive: boolean;
+  createdAt: string;
+  userCount: number;
+  permissionCount: number;
 };

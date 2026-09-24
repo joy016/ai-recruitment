@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
@@ -26,7 +26,8 @@ import {
   DEFAULT_ACCOUNT_PASSWORD,
   DUMMY_ACCOUNTS,
 } from "./(constants)/constants";
-import { Account, AccountFormValues } from "./(types)/account.types";
+import { Account, AccountFormValues, Role } from "./(types)/account.types";
+import { getAllRoles } from "@/lib/api/roles";
 
 type AccountStatusFilter = (typeof ACCOUNT_STATUS_FILTERS)[number];
 
@@ -77,6 +78,16 @@ export default function AccountsPage() {
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastOpen, setToastOpen] = useState(false);
+  const [roles, setRoles] = useState<Role[]>([]);
+
+  useEffect(() => {
+    const getRoles = async () => {
+      const roles = await getAllRoles();
+      setRoles(roles ?? []);
+    };
+
+    getRoles();
+  }, []);
 
   const filteredAccounts = useMemo(() => {
     if (statusFilter === "All") {
@@ -115,11 +126,14 @@ export default function AccountsPage() {
 
   const handleOpenEdit = (account: Account) => {
     setEditingAccountId(account.id);
+    const matchedRole = roles.find((role) => role.roleName === account.role);
     setEditingValues({
       firstName: account.firstName,
       lastName: account.lastName,
       email: account.email,
-      role: account.role,
+      role: matchedRole
+        ? { roleId: matchedRole.roleId, roleName: matchedRole.roleName }
+        : { roleId: 0, roleName: account.role },
     });
     setFormModalKey((key) => key + 1);
     setFormOpen(true);
@@ -130,17 +144,30 @@ export default function AccountsPage() {
   };
 
   const handleSubmitForm = (values: AccountFormValues) => {
+    const selectedRoleName = values.role.roleName as Account["role"];
+
     if (editingAccountId) {
       setAccounts((current) =>
         current.map((account) =>
-          account.id === editingAccountId ? { ...account, ...values } : account,
+          account.id === editingAccountId
+            ? {
+                ...account,
+                firstName: values.firstName,
+                lastName: values.lastName,
+                email: values.email,
+                role: selectedRoleName,
+              }
+            : account,
         ),
       );
       showToast("User account updated successfully.");
     } else {
       const newAccount: Account = {
         id: createAccountId(),
-        ...values,
+        firstName: values.firstName,
+        lastName: values.lastName,
+        email: values.email,
+        role: selectedRoleName,
         status: "Active",
         createdAt: new Date().toISOString(),
       };
@@ -365,6 +392,7 @@ export default function AccountsPage() {
         existingEmails={existingEmails}
         onClose={handleCloseForm}
         onSubmit={handleSubmitForm}
+        roles={roles}
       />
 
       <ConfirmationModal

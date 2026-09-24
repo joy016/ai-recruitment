@@ -20,6 +20,8 @@ namespace ai_recruitment.Features.Users.Dto
         [Required]
         [MinLength(8)]
         public string Password { get; set; } = string.Empty;
+        [Required]
+        public string InsertedBy { get; set; } = string.Empty;
 
         [Required]
         [Range(1, int.MaxValue, ErrorMessage = "RoleId must be a valid role identifier.")]

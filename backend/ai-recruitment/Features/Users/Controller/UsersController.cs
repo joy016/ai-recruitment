@@ -50,6 +50,7 @@ namespace ai_recruitment.Features.Users.Controller
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = normalizedEmail,
+                InsertedBy = dto.InsertedBy,
                 RoleId = dto.RoleId,
             };
 
@@ -58,20 +59,12 @@ namespace ai_recruitment.Features.Users.Controller
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(
-                nameof(GetUser),
-                new { id = user.Id },
-                new UserDto
-                {
-                    Id = user.Id,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    Email = user.Email,
-                    IsActive = user.IsActive,
-                    CreatedAt = user.CreatedAt,
-                    RoleId = user.RoleId,
-                    InsertedBy = user.InsertedBy
-                }
+            return Ok(
+             new
+             {
+                 StatusMessage = "User Successfully Inserted",
+                 StatusCode = 200,
+             }
             );
         }
 
