@@ -21,7 +21,7 @@ import { Close } from "@mui/icons-material";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
 import { generateUniqueAccountEmail } from "../(constants)/constants";
 import { AccountFormValues, Role } from "../(types)/account.types";
-import { getUser, insertUser } from "@/lib/api/user";
+import { editUser, getUser, insertUser } from "@/lib/api/user";
 import { capitalizeFirstLetter } from "@/utils/capitalize-letter";
 import { DEFAULT_PASSWORD } from "@/constant/default-pass";
 import { useAppSelector } from "@/lib/store/hooks";
@@ -78,7 +78,7 @@ export default function AccountModalForm({
     };
 
     fetchUser();
-  }, []);
+  }, [userId]);
 
   const handleNameChange = (field: "firstName" | "lastName", value: string) => {
     setAccountForm((current) => {
@@ -130,16 +130,26 @@ export default function AccountModalForm({
     if (!pendingValues) {
       return;
     }
-    const userPayload = {
-      firstName: capitalizeFirstLetter(accountForm.firstName),
-      lastName: capitalizeFirstLetter(accountForm.lastName),
-      email: accountForm.email,
-      password: DEFAULT_PASSWORD,
-      insertedBy: currentUser?.firstName! + currentUser?.lastName!,
-      roleId: accountForm.role.roleId,
-    };
 
-    await insertUser(userPayload);
+    if (isEditing) {
+      await editUser(userId, {
+        firstName: capitalizeFirstLetter(accountForm.firstName),
+        lastName: capitalizeFirstLetter(accountForm.lastName),
+        email: accountForm.email,
+        roleId: accountForm.role.roleId,
+      });
+    } else {
+      const userPayload = {
+        firstName: capitalizeFirstLetter(accountForm.firstName),
+        lastName: capitalizeFirstLetter(accountForm.lastName),
+        email: accountForm.email,
+        password: DEFAULT_PASSWORD,
+        insertedBy: currentUser?.firstName! + currentUser?.lastName!,
+        roleId: accountForm.role.roleId,
+      };
+
+      await insertUser(userPayload);
+    }
 
     onSubmit(pendingValues);
     setPendingValues(null);

@@ -184,7 +184,6 @@ namespace ai_recruitment.Features.Users.Controller
             user.LastName = dto.LastName;
             user.Email = normalizedEmail;
             user.RoleId = dto.RoleId;
-            user.IsActive = dto.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

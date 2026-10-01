@@ -1,6 +1,7 @@
 import BackendServer from "@/constant/server-address";
 import { api } from "../api-client";
 import {
+  EditUserPayload,
   GetUsersPayload,
   GetUsersResponse,
   UserItem,
@@ -40,4 +41,8 @@ export const getUser = async (id: string) => {
 
 export const updateUserStatus = async (id: string, status: boolean) => {
   return api.put(`${USER_ENDPOINT}/updateUserStatus/${id}`, status);
+};
+
+export const editUser = async (id: string, payload: EditUserPayload) => {
+  return api.put(`${USER_ENDPOINT}/editUser/${id}`, payload);
 };

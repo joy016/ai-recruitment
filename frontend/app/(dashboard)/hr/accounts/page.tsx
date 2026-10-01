@@ -75,6 +75,7 @@ export default function AccountsPage() {
     roleName: "All",
   });
   const [rowCount, setRowCount] = useState(0);
+
   useEffect(() => {
     const getRoles = async () => {
       const roles = await getAllRoles();
@@ -88,7 +89,7 @@ export default function AccountsPage() {
   const fetchUsers = async () => {
     const payload = {
       roleId: selectedRole.roleId !== 0 ? selectedRole.roleId : undefined,
-      status: true,
+      status: statusFilter === "All" ? undefined : statusFilter === "Active",
       pageNumber: pageNumber,
       pageSize: pageSize,
     };
@@ -101,7 +102,7 @@ export default function AccountsPage() {
 
   useEffect(() => {
     fetchUsers();
-  }, [pageNumber, selectedRole.roleId]);
+  }, [pageNumber, selectedRole.roleId, statusFilter]);
 
   const existingEmails = useMemo(
     () =>
@@ -125,6 +126,12 @@ export default function AccountsPage() {
 
   const handleOpenEdit = (account: UserItem) => {
     setEditingAccountId(account.id);
+    setEditingValues({
+      firstName: account.firstName,
+      lastName: account.lastName,
+      email: account.email,
+      role: { roleName: account.roleName, roleId: account.roleId },
+    });
     setFormOpen(true);
   };
 

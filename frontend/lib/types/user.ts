@@ -34,3 +34,10 @@ export interface GetUsersResponse {
   pageSize: number;
   totalPages: number;
 }
+
+export interface EditUserPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  roleId: number;
+}
