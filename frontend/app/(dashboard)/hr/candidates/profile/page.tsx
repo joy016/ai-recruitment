@@ -24,8 +24,6 @@ import {
 import { Candidate } from "../(types)/candidates.types";
 import { getCandidateList, updateCandidateStatus } from "@/lib/api/candidate";
 import CandidateTable from "../(components)/CandidateTable";
-import { INITIAL_UPDATE_FORM } from "../(constants)/constants";
-import { UpdateStatusPayload } from "@/lib/types/candidate";
 import {
   createMuiPageChangeHandler,
   createMuiPageSizeChangeHandler,
