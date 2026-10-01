@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -21,7 +21,7 @@ import { Close } from "@mui/icons-material";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
 import { generateUniqueAccountEmail } from "../(constants)/constants";
 import { AccountFormValues, Role } from "../(types)/account.types";
-import { insertUser } from "@/lib/api/user";
+import { getUser, insertUser } from "@/lib/api/user";
 import { capitalizeFirstLetter } from "@/utils/capitalize-letter";
 import { DEFAULT_PASSWORD } from "@/constant/default-pass";
 import { useAppSelector } from "@/lib/store/hooks";
@@ -42,6 +42,7 @@ type AccountModalFormProps = {
   onClose: () => void;
   onSubmit: (values: AccountFormValues) => void;
   roles: Role[];
+  userId: string;
 };
 
 export default function AccountModalForm({
@@ -52,6 +53,7 @@ export default function AccountModalForm({
   onClose,
   onSubmit,
   roles,
+  userId,
 }: Readonly<AccountModalFormProps>) {
   const [accountForm, setAccountForm] = useState<AccountFormValues>(
     () => initialValues ?? emptyAccountForm,
@@ -62,6 +64,21 @@ export default function AccountModalForm({
     null,
   );
   const currentUser = useAppSelector((state) => state.user.currentUser);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      if (!userId) return;
+      const user = await getUser(userId);
+      setAccountForm({
+        firstName: user.firstName ?? "",
+        lastName: user.lastName ?? "",
+        email: user.email ?? "",
+        role: { roleId: user.roleId, roleName: user.roleName },
+      });
+    };
+
+    fetchUser();
+  }, []);
 
   const handleNameChange = (field: "firstName" | "lastName", value: string) => {
     setAccountForm((current) => {
@@ -122,7 +139,7 @@ export default function AccountModalForm({
       roleId: accountForm.role.roleId,
     };
 
-    const res = await insertUser(userPayload);
+    await insertUser(userPayload);
 
     onSubmit(pendingValues);
     setPendingValues(null);

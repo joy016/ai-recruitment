@@ -26,6 +26,10 @@ import { getCandidateList, updateCandidateStatus } from "@/lib/api/candidate";
 import CandidateTable from "../(components)/CandidateTable";
 import { INITIAL_UPDATE_FORM } from "../(constants)/constants";
 import { UpdateStatusPayload } from "@/lib/types/candidate";
+import {
+  createMuiPageChangeHandler,
+  createMuiPageSizeChangeHandler,
+} from "@/lib/utils/pagination";
 
 const formatScheduleForDisplay = (value: string) => {
   if (!value) {
@@ -191,14 +195,12 @@ function CandidateProfileContent() {
     fetchCandidates();
   }, [jobId, pageNumber, pageSize]);
 
-  const handlePageChange = (_event: unknown, newPage: number) => {
-    setPageNumber(newPage + 1);
-  };
+  const handlePageChange = createMuiPageChangeHandler(setPageNumber);
 
-  const handlePageSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setPageSize(Number(event.target.value));
-    setPageNumber(1);
-  };
+  const handlePageSizeChange = createMuiPageSizeChangeHandler(
+    setPageNumber,
+    setPageSize,
+  );
 
   useEffect(() => {
     if (candidates.length === 0) {

@@ -32,4 +32,6 @@ export type Role = {
   createdAt: string;
   userCount: number;
   permissionCount: number;
+  chipColor: string;
+  backgroundColor: string;
 };

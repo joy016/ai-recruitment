@@ -40,6 +40,10 @@ import {
   JOBS_TABLE_HEIGHT,
 } from "@/app/(constants)/job";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
+import {
+  createMuiPageChangeHandler,
+  createMuiPageSizeChangeHandler,
+} from "@/lib/utils/pagination";
 
 const mapJobDetailsToFormValues = (
   details: JobDetailsResponse,
@@ -291,21 +295,15 @@ export default function JobsPage() {
     setStatusFilter(event.target.value as "All" | JobStatus);
   };
 
-  const handlePageChange = (
-    _event: React.MouseEvent<HTMLButtonElement> | null,
-    newPage: number,
-  ) => {
-    setIsLoadingJobs(true);
-    setPageNumber(newPage + 1);
-  };
+  const handlePageChange = createMuiPageChangeHandler(setPageNumber, {
+    onBeforeChange: () => setIsLoadingJobs(true),
+  });
 
-  const handlePageSizeChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
-    setIsLoadingJobs(true);
-    setPageNumber(1);
-    setPageSize(Number(event.target.value));
-  };
+  const handlePageSizeChange = createMuiPageSizeChangeHandler(
+    setPageNumber,
+    setPageSize,
+    { onBeforeChange: () => setIsLoadingJobs(true) },
+  );
 
   const handleOpenJobDetails = (jobPost: JobItem) => {
     setSelectedJobId(jobPost.jobId);

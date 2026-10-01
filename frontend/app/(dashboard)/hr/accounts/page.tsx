@@ -28,27 +28,17 @@ import {
 } from "./(constants)/constants";
 import { Account, AccountFormValues, Role } from "./(types)/account.types";
 import { getAllRoles } from "@/lib/api/roles";
+import {
+  createPageChangeHandler,
+  createPageSizeChangeHandler,
+} from "@/lib/utils/pagination";
+import { getUsers, updateUserStatus } from "@/lib/api/user";
+import { UserItem } from "@/lib/types/user";
 
 type AccountStatusFilter = (typeof ACCOUNT_STATUS_FILTERS)[number];
 
-const getRoleChipStyle = (role: Account["role"]) => {
-  if (role === "Admin") {
-    return { color: "#7b2fb0", backgroundColor: "#f3e8fb" };
-  }
-
-  if (role === "HR Manager") {
-    return { color: "#1c8758", backgroundColor: "#e8f7ef" };
-  }
-
-  if (role === "Recruiter") {
-    return { color: "#1f80b6", backgroundColor: "#e8f4fb" };
-  }
-
-  return { color: "#b36a00", backgroundColor: "#fff3e3" };
-};
-
-const getStatusChipStyle = (status: Account["status"]) => {
-  if (status === "Active") {
+const getStatusChipStyle = (status: UserItem["isActive"]) => {
+  if (status) {
     return { color: "#1c8758", backgroundColor: "#e8f7ef" };
   }
 
@@ -74,35 +64,44 @@ export default function AccountsPage() {
     null,
   );
 
-  const [pendingDelete, setPendingDelete] = useState<Account | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<UserItem | null>(null);
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastOpen, setToastOpen] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
-
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [selectedRole, setSelectedRole] = useState({
+    roleId: 0,
+    roleName: "All",
+  });
+  const [rowCount, setRowCount] = useState(0);
   useEffect(() => {
     const getRoles = async () => {
       const roles = await getAllRoles();
+      console.log("Raw /api/Roles/getAllRoles response:", roles);
       setRoles(roles ?? []);
     };
 
     getRoles();
   }, []);
 
-  const filteredAccounts = useMemo(() => {
-    if (statusFilter === "All") {
-      return accounts;
-    }
+  const fetchUsers = async () => {
+    const payload = {
+      roleId: selectedRole.roleId !== 0 ? selectedRole.roleId : undefined,
+      status: true,
+      pageNumber: pageNumber,
+      pageSize: pageSize,
+    };
+    const users = await getUsers(payload);
+    setUsers(users.data ?? []);
+    setRowCount(users.totalCount);
+    setPageNumber(users.pageNumber);
+    setPageSize(users.pageSize);
+  };
 
-    return accounts.filter((account) => account.status === statusFilter);
-  }, [accounts, statusFilter]);
-
-  const totalCount = filteredAccounts.length;
-
-  const visibleAccounts = useMemo(() => {
-    const startIndex = (pageNumber - 1) * pageSize;
-    return filteredAccounts.slice(startIndex, startIndex + pageSize);
-  }, [filteredAccounts, pageNumber, pageSize]);
+  useEffect(() => {
+    fetchUsers();
+  }, [pageNumber, selectedRole.roleId]);
 
   const existingEmails = useMemo(
     () =>
@@ -124,18 +123,8 @@ export default function AccountsPage() {
     setFormOpen(true);
   };
 
-  const handleOpenEdit = (account: Account) => {
+  const handleOpenEdit = (account: UserItem) => {
     setEditingAccountId(account.id);
-    const matchedRole = roles.find((role) => role.roleName === account.role);
-    setEditingValues({
-      firstName: account.firstName,
-      lastName: account.lastName,
-      email: account.email,
-      role: matchedRole
-        ? { roleId: matchedRole.roleId, roleName: matchedRole.roleName }
-        : { roleId: 0, roleName: account.role },
-    });
-    setFormModalKey((key) => key + 1);
     setFormOpen(true);
   };
 
@@ -181,7 +170,7 @@ export default function AccountsPage() {
     setFormOpen(false);
   };
 
-  const handleRequestDelete = (account: Account) => {
+  const handleRequestDelete = (account: UserItem) => {
     setPendingDelete(account);
   };
 
@@ -189,10 +178,12 @@ export default function AccountsPage() {
     setPendingDelete(null);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!pendingDelete) {
       return;
     }
+
+    await updateUserStatus(pendingDelete.id, !pendingDelete.isActive);
 
     setAccounts((current) =>
       current.filter((account) => account.id !== pendingDelete.id),
@@ -200,6 +191,7 @@ export default function AccountsPage() {
     showToast(
       `${pendingDelete.firstName} ${pendingDelete.lastName} was removed.`,
     );
+    fetchUsers();
   };
 
   const handleStatusFilterChange = (
@@ -209,16 +201,34 @@ export default function AccountsPage() {
     setStatusFilter(event.target.value as AccountStatusFilter);
   };
 
-  const handlePageChange = (newPageNumber: number) => {
-    setPageNumber(newPageNumber);
-  };
-
-  const handlePageSizeChange = (newPageSize: number) => {
+  const handleRoleFilterChange = (event: SelectChangeEvent<number>) => {
+    const selectedRoleId = Number(event.target.value);
     setPageNumber(1);
-    setPageSize(newPageSize);
+
+    if (selectedRoleId === 0) {
+      setSelectedRole({ roleId: 0, roleName: "All" });
+      return;
+    }
+
+    const matchedRole = roles.find((role) => role.roleId === selectedRoleId);
+
+    if (matchedRole) {
+      setSelectedRole({
+        roleId: matchedRole.roleId,
+        roleName: matchedRole.roleName,
+      });
+    }
   };
 
-  const columns: CommonTableColumn<Account>[] = [
+  console.log({ selectedRole });
+
+  const handlePageChange = createPageChangeHandler(setPageNumber);
+  const handlePageSizeChange = createPageSizeChangeHandler(
+    setPageNumber,
+    setPageSize,
+  );
+
+  const columns: CommonTableColumn<UserItem>[] = [
     {
       key: "name",
       label: "Name",
@@ -229,11 +239,15 @@ export default function AccountsPage() {
       key: "role",
       label: "Role",
       render: (row) => {
-        const style = getRoleChipStyle(row.role);
+        const roleColor = roles.find((role) => role.roleId === row.roleId);
+        const style = {
+          color: roleColor?.chipColor,
+          backgroundColor: roleColor?.backgroundColor,
+        };
         return (
           <Chip
             size="small"
-            label={row.role}
+            label={row.roleName}
             sx={{ fontWeight: 600, ...style }}
           />
         );
@@ -243,11 +257,11 @@ export default function AccountsPage() {
       key: "status",
       label: "Status",
       render: (row) => {
-        const style = getStatusChipStyle(row.status);
+        const style = getStatusChipStyle(row.isActive);
         return (
           <Chip
             size="small"
-            label={row.status}
+            label={row.isActive ? "Active" : "Inactive"}
             sx={{ fontWeight: 600, ...style }}
           />
         );
@@ -341,7 +355,8 @@ export default function AccountsPage() {
           mt: 2.2,
           display: "grid",
           gap: 1,
-          gridTemplateColumns: { xs: "1fr", sm: "220px" },
+          justifyContent: "end",
+          gridTemplateColumns: { xs: "1fr", sm: "220px 220px" },
         }}
       >
         <Box>
@@ -364,21 +379,40 @@ export default function AccountsPage() {
             ))}
           </Select>
         </Box>
+
+        <Box>
+          <Typography
+            variant="body2"
+            sx={{ color: "#52718c", mb: 0.6, fontWeight: 600 }}
+          >
+            Role
+          </Typography>
+          <Select
+            size="small"
+            value={selectedRole.roleId}
+            onChange={handleRoleFilterChange}
+            renderValue={() => selectedRole.roleName}
+            fullWidth
+          >
+            <MenuItem value={0}>All</MenuItem>
+            {roles.map((role) => (
+              <MenuItem key={role.roleId} value={role.roleId}>
+                {role.roleName}
+              </MenuItem>
+            ))}
+          </Select>
+        </Box>
       </Box>
 
       <Box sx={{ mt: 2.5 }}>
         <CommonTable
           columns={columns}
-          data={visibleAccounts}
+          data={users}
           getRowKey={(row) => row.id}
-          emptyMessage={
-            statusFilter === "All"
-              ? "No user accounts yet."
-              : `No ${statusFilter.toLowerCase()} user accounts.`
-          }
+          emptyMessage={"sample"}
           pageSize={pageSize}
           pageNumber={pageNumber}
-          totalCount={totalCount}
+          totalCount={rowCount}
           onPageChange={handlePageChange}
           onPageSizeChange={handlePageSizeChange}
         />
@@ -388,6 +422,7 @@ export default function AccountsPage() {
         key={formModalKey}
         open={formOpen}
         isEditing={Boolean(editingAccountId)}
+        userId={editingAccountId!}
         initialValues={editingValues}
         existingEmails={existingEmails}
         onClose={handleCloseForm}
