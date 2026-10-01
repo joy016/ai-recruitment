@@ -69,13 +69,18 @@ namespace ai_recruitment.Features.Users.Controller
         }
 
         [HttpGet("getAllUsers")]
-        public async Task<IActionResult> GetAllUsers([FromQuery] int? roleId, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        public async Task<IActionResult> GetAllUsers([FromQuery] int? roleId, [FromQuery] bool? status, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             var query = _context.Users.AsNoTracking().AsQueryable();
 
             if (roleId.HasValue)
             {
                 query = query.Where(u => u.RoleId == roleId.Value);
+            }
+
+            if (status.HasValue)
+            {
+                query = query.Where(u => u.IsActive == status.Value);
             }
 
             query = query.OrderBy(u => u.FirstName);
@@ -93,9 +98,10 @@ namespace ai_recruitment.Features.Users.Controller
                     IsActive = u.IsActive,
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt,
-                    RoleId = u.RoleId,
-                    RoleName = u.Role.RoleName
-                })                  
+                    RoleId = u.RoleId, 
+                    RoleName = u.Role.RoleName,
+                    InsertedBy =u.InsertedBy
+                })               
                 .ToListAsync();
 
             return Ok(new
@@ -123,7 +129,8 @@ namespace ai_recruitment.Features.Users.Controller
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId,
-                    RoleName = u.Role.RoleName
+                    RoleName = u.Role.RoleName, 
+                    InsertedBy = u.InsertedBy
                 })
                 .FirstOrDefaultAsync();
 

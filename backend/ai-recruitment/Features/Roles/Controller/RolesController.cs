@@ -61,7 +61,10 @@ namespace ai_recruitment.Features.Roles.Controller
                     IsActive = r.IsActive,
                     CreatedAt = r.CreatedAt,
                     UserCount = r.Users.Count(),
-                    PermissionCount = r.Permissions.Count()
+                    PermissionCount = r.Permissions.Count(),
+                    ChipColor = r.ChipColor,
+                    BackgroundColor = r.BackgroundColor,
+                    
                 })
                 .ToListAsync();
 
@@ -81,7 +84,8 @@ namespace ai_recruitment.Features.Roles.Controller
                     IsActive = r.IsActive,
                     CreatedAt = r.CreatedAt,
                     UserCount = r.Users.Count(),
-                    PermissionCount = r.Permissions.Count()
+                    PermissionCount = r.Permissions.Count(),
+                    
                 })
                 .FirstOrDefaultAsync();
 

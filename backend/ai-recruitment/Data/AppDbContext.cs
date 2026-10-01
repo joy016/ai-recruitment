@@ -82,36 +82,51 @@ namespace ai_recruitment.Data
 
             //seed roles
             modelBuilder.Entity<Role>().HasData(
-                new Role { RoleId = 1, RoleName = "Super Admin", Description = "Full system access", CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc) },
+                new Role 
+                { 
+                     RoleId = 1, RoleName = "Super Admin", 
+                     Description = "Full system access", 
+                     CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                     ChipColor = "#7B2FB0",
+                      BackgroundColor = "#F3E8FB"
+                },
                 new Role
                 {
                     RoleId = 2,
                     RoleName = "HR Admin",
                     Description = "Manage recruitment operations",
-                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
+                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                    ChipColor = "#2563EB",
+                    BackgroundColor = "#EFF6FF"
                 },
-                    new Role
-                    {
-                        RoleId = 3,
-                        RoleName = "Recruiter",
-                        Description = "Manage recruitment",
-                        CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
-                    },
-    new Role
-    {
-        RoleId = 4,
-        RoleName = "Hiring Manager",
-        Description = "Manage assigned jobs and candidates",
-        CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
-    },
-    new Role
-    {
-        RoleId = 5,
-        RoleName = "Interviewer",
-        Description = "Manage interviews",
-        CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc)
-    }
-                );
+                new Role
+                {
+                    RoleId = 3,
+                    RoleName = "Recruiter",
+                    Description = "Manage recruitment",
+                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                    ChipColor = "#0F766E",
+                    BackgroundColor = "#ECFDF5"
+                },
+                new Role
+                {
+                    RoleId = 4,
+                    RoleName = "Hiring Manager",
+                    Description = "Manage assigned jobs and candidates",
+                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                    ChipColor = "#D97706",
+                    BackgroundColor = "#FFF7ED"
+                },
+                new Role
+                {
+                    RoleId = 5,
+                    RoleName = "Interviewer",
+                    Description = "Manage interviews",
+                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                    ChipColor = "#DB2777",
+                    BackgroundColor = "#FDF2F8"
+                }
+              );
 
             // seed a bootstrap admin user so the (now [Authorize]-protected) Users/Roles/Permissions
             // endpoints can be reached at least once to create real accounts.

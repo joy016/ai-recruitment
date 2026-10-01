@@ -17,6 +17,10 @@ namespace ai_recruitment.Features.Roles.Model
         public string? Description { get; set; }
 
         public bool IsActive { get; set; } = true;
+        [Required]
+        public string? ChipColor { get; set; }
+        [Required]
+        public string? BackgroundColor { get; set; } 
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
