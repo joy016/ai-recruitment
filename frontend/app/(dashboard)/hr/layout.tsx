@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { clearToken } from "@/lib/utils/token";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { clearUser } from "@/lib/store/features/userSlice";
+import SessionGuard from "@/app/component/SessionGuard";
 import {
   AppBar,
   Avatar,
@@ -174,6 +175,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f2f9ff" }}>
       <CssBaseline />
+      <SessionGuard />
       <AppBar
         position="fixed"
         elevation={0}

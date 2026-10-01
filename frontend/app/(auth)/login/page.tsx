@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import axios from "axios";
 import {
   Alert,
@@ -20,6 +20,22 @@ import { login } from "@/lib/api/auth";
 import { setToken } from "@/lib/utils/token";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { setUser } from "@/lib/store/features/userSlice";
+import { SESSION_EXPIRED_REASON } from "@/app/component/SessionGuard";
+
+function SessionExpiredNotice() {
+  const searchParams = useSearchParams();
+
+  if (searchParams.get("reason") !== SESSION_EXPIRED_REASON) {
+    return null;
+  }
+
+  return (
+    <Alert severity="info" sx={{ mb: 2.5 }}>
+      Your session has expired due to inactivity. Please sign in again to
+      continue.
+    </Alert>
+  );
+}
 
 const describeLoginError = (error: unknown) => {
   if (axios.isAxiosError<{ title?: string; message?: string }>(error)) {
@@ -111,6 +127,11 @@ export default function LoginPage() {
             noValidate
             sx={{ mt: 3 }}
           >
+            {!loginError && (
+              <Suspense fallback={null}>
+                <SessionExpiredNotice />
+              </Suspense>
+            )}
             {loginError && (
               <Alert severity="error" sx={{ mb: 2.5 }}>
                 {loginError}

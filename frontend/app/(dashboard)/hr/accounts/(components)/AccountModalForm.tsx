@@ -132,7 +132,7 @@ export default function AccountModalForm({
     }
     const userPayload = {
       firstName: capitalizeFirstLetter(accountForm.firstName),
-      lastName: capitalizeFirstLetter(accountForm.firstName),
+      lastName: capitalizeFirstLetter(accountForm.lastName),
       email: accountForm.email,
       password: DEFAULT_PASSWORD,
       insertedBy: currentUser?.firstName! + currentUser?.lastName!,

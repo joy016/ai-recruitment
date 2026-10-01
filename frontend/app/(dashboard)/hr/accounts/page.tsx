@@ -168,6 +168,7 @@ export default function AccountsPage() {
     }
 
     setFormOpen(false);
+    fetchUsers();
   };
 
   const handleRequestDelete = (account: UserItem) => {
@@ -219,8 +220,6 @@ export default function AccountsPage() {
       });
     }
   };
-
-  console.log({ selectedRole });
 
   const handlePageChange = createPageChangeHandler(setPageNumber);
   const handlePageSizeChange = createPageSizeChangeHandler(
