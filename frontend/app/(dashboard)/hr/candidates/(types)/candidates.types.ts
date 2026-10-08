@@ -1,4 +1,3 @@
-import { PaginatedResponse } from "./candidates.types";
 export type ApplicantStatus =
   | "AI Screening passed"
   | "Initial Interview"
