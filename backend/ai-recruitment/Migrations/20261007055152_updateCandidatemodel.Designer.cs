@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using ai_recruitment.Data;
@@ -11,9 +12,11 @@ using ai_recruitment.Data;
 namespace ai_recruitment.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007055152_updateCandidatemodel")]
+    partial class updateCandidatemodel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -261,8 +264,9 @@ namespace ai_recruitment.Migrations
                     b.Property<DateTime?>("InterviewSched")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("InterviewerId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("Inteviewer")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("JobId")
                         .HasColumnType("integer");
@@ -305,8 +309,6 @@ namespace ai_recruitment.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("InterviewerId");
 
                     b.HasIndex("JobId");
 
@@ -558,18 +560,11 @@ namespace ai_recruitment.Migrations
 
             modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Candidate", b =>
                 {
-                    b.HasOne("ai_recruitment.Features.Users.Model.User", "Interviewer")
-                        .WithMany("InterviewedCandidates")
-                        .HasForeignKey("InterviewerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("ai_recruitment.Features.JobPosts.Model.Job", "Job")
                         .WithMany("Candidates")
                         .HasForeignKey("JobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Interviewer");
 
                     b.Navigation("Job");
                 });
@@ -606,11 +601,6 @@ namespace ai_recruitment.Migrations
                     b.Navigation("Permissions");
 
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("ai_recruitment.Features.Users.Model.User", b =>
-                {
-                    b.Navigation("InterviewedCandidates");
                 });
 #pragma warning restore 612, 618
         }

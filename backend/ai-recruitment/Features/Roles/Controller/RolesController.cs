@@ -3,6 +3,7 @@ using ai_recruitment.Features.Roles.Dto;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Runtime.InteropServices;
 
 namespace ai_recruitment.Features.Roles.Controller
 {
@@ -146,6 +147,17 @@ namespace ai_recruitment.Features.Roles.Controller
                 statusCode = 200,
                 statusMessage = "Role status updated successfully."
             });
+        }
+
+        [HttpGet("getInterviewer")]
+        public async Task<IActionResult> GetInterviewer()
+        {
+            var roleIds = new[] { 4, 5 };
+            var interviewer = await _context.Users
+                .Where(i => roleIds.Contains(i.RoleId) && i.IsActive)
+                .Select(u => new InterviewerDto {InterviewerId = u.Id, InterviewerName = u.FirstName + " " + u.LastName})
+                .ToListAsync();
+            return Ok(interviewer);
         }
     }
 }

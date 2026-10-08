@@ -41,3 +41,8 @@ export interface EditUserPayload {
   email: string;
   roleId: number;
 }
+
+export interface Interviewer {
+  interviewerId: string;
+  interviewerName: string;
+}

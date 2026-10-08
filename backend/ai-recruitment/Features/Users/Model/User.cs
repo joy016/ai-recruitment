@@ -1,5 +1,6 @@
-using System.ComponentModel.DataAnnotations;
+using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.Roles.Model;
+using System.ComponentModel.DataAnnotations;
 
 namespace ai_recruitment.Features.Users.Model
 {
@@ -41,6 +42,7 @@ namespace ai_recruitment.Features.Users.Model
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 
-        // Navigation: one user -> many refresh tokens (one per active session/device)
+        public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
+
     }
 }

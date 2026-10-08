@@ -17,5 +17,6 @@ export interface UpdateStatusPayload {
   id: string;
   applicantStatusId: number;
   interviewSched: string;
+  interviewerId?: string;
   updatedAt: string;
 }

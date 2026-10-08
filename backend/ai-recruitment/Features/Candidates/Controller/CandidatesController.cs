@@ -7,12 +7,14 @@ using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.IO;
+using Microsoft.AspNetCore.Authorization;
 
 namespace ai_recruitment.Features.Candidates.controller
 
 {
     [ApiController]
     [Route("api/[controller]")]
+    [Authorize]
     public class CandidatesController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -368,9 +370,25 @@ namespace ai_recruitment.Features.Candidates.controller
                 return NotFound();
             }
 
-            candidate.ApplicantStatusId = dto.ApplicantStatusId;
-            candidate.InterviewSched = dto.InterviewSched;
-            candidate.UpdatedAt = dto.UpdatedAt;
+            // Supports partial updates: changing only the status, only the
+            // interview schedule (e.g. correcting a date/time), or only
+            // reassigning the interviewer - without requiring the others.
+            if (dto.ApplicantStatusId.HasValue)
+            {
+                candidate.ApplicantStatusId = dto.ApplicantStatusId.Value;
+            }
+
+            if (dto.InterviewSched.HasValue)
+            {
+                candidate.InterviewSched = dto.InterviewSched.Value;
+            }
+
+            if (dto.InterviewerId.HasValue)
+            {
+                candidate.InterviewerId = dto.InterviewerId.Value;
+            }
+
+            candidate.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
 
@@ -378,6 +396,52 @@ namespace ai_recruitment.Features.Candidates.controller
             {
                 statusCode = 200,
                 statusMessage = "Candidate status updated successfully."
+            });
+        }
+
+        [HttpGet("getCandidatesForInterviewToday")]
+        public async Task<IActionResult> GetCandidatesForInterviewToday([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
+        {
+            var today = DateTime.UtcNow.Date;
+            var tomorrow = today.AddDays(1);
+
+            var query = _context.Candidates
+                .AsNoTracking()
+                .Where(c => c.InterviewSched != null
+                    && c.InterviewSched >= today
+                    && c.InterviewSched < tomorrow)
+                .Join(_context.ApplicantStatuses,
+                    c => c.ApplicantStatusId,
+                    s => s.StatusId,
+                    (c, s) => new InterviewTodayListDto
+                    {
+                        CandidateId = c.Id,
+                        CandidateName = c.FirstName + " " + c.LastName,
+                        PositionApplied = c.Role,
+                        ApplicationStatus = s.StatusName,
+                        InterviewTime = c.InterviewSched,
+                        Interviewer = c.Interviewer != null
+                            ? c.Interviewer.FirstName + " " + c.Interviewer.LastName
+                            : null
+                    });
+
+            var totalCount = await query.CountAsync();
+
+            var candidates = await query
+                .OrderBy(c => c.InterviewTime)
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            return Ok(new
+            {
+                data = candidates,
+                totalCount,
+                pageNumber,
+                pageSize,
+                totalPages
             });
         }
     }
