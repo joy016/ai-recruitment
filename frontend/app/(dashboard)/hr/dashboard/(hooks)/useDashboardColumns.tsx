@@ -99,17 +99,17 @@ export const useForInterviewColumns =
         },
         {
           key: "applicationStatus",
-          label: "Applied At",
-          render: (can) => formatDateTime(can.applicationStatus),
+          label: "Stage",
+          render: (can) => can.applicationStatus,
         },
         {
           key: "interviewTime",
-          label: "Experience",
-          render: (can) => can.interviewTime,
+          label: "Interview Schedule",
+          render: (can) => formatDateTime(can.interviewTime),
         },
         {
           key: "interviewer",
-          label: "Source",
+          label: "Interviewer",
           render: (can) => can.interviewer,
         },
       ],
