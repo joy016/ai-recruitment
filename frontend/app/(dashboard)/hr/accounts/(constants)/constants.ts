@@ -1,4 +1,8 @@
-import { Account, AccountRole } from "../(types)/account.types";
+import {
+  Account,
+  AccountFormValues,
+  AccountRole,
+} from "../(types)/account.types";
 
 export const ACCOUNT_ROLES: AccountRole[] = [
   "Admin",
@@ -129,3 +133,11 @@ export const DUMMY_ACCOUNTS: Account[] = [
     createdAt: "2026-07-02T13:40:00.000Z",
   },
 ];
+
+export const EMPTY_ACCOUNT_FORM: AccountFormValues = {
+  firstName: "",
+  lastName: "",
+  email: "",
+  role: { roleId: 0, roleName: "" },
+  department: { id: 0, departmentName: "" },
+};

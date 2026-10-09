@@ -1,3 +1,5 @@
+type DateInput = string | null | undefined;
+
 const RELATIVE_TIME_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] =
   [
     { unit: "year", ms: 365 * 24 * 60 * 60 * 1000 },
@@ -8,36 +10,11 @@ const RELATIVE_TIME_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] =
     { unit: "minute", ms: 60 * 1000 },
   ];
 
+const EMPTY_PLACEHOLDER = "-";
+
 const relativeTimeFormatter = new Intl.RelativeTimeFormat("en", {
   numeric: "auto",
 });
-
-/**
- * Formats an ISO date string as a relative time, e.g. "2 days ago",
- * "yesterday", "5 minutes ago". Falls back to the raw value if it can't
- * be parsed, and to "just now" for anything under a minute old.
- */
-export const formatRelativeTime = (value: string): string => {
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return value;
-  }
-
-  const diffMs = parsedDate.getTime() - Date.now();
-  const absDiffMs = Math.abs(diffMs);
-
-  if (absDiffMs < 60 * 1000) {
-    return "just now";
-  }
-
-  for (const { unit, ms } of RELATIVE_TIME_UNITS) {
-    if (absDiffMs >= ms) {
-      return relativeTimeFormatter.format(Math.round(diffMs / ms), unit);
-    }
-  }
-
-  return "just now";
-};
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
@@ -48,34 +25,49 @@ const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   hour12: true,
 });
 
-/**
- * Formats an ISO date string as "June 21, 2026, 8:05 AM". Falls back to the
- * raw value if it can't be parsed.
- */
-export const formatDateTime = (value: string): string => {
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return value;
-  }
-
-  return dateTimeFormatter.format(parsedDate);
-};
-
 const dateOnlyFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",
   day: "numeric",
+  timeZone: "UTC", // keeps date-only values (midnight UTC) from shifting a day
 });
 
 /**
- * Formats an ISO date string as "June 21, 2026". Falls back to the raw value
- * if it can't be parsed.
+ * Shared guard: returns the parsed Date, or a string to return early
+ * (placeholder for empty input, raw value for unparseable input).
  */
-export const formatDateOnly = (value: string): string => {
-  const parsedDate = new Date(value);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return value;
+const parseOrFallback = (value: DateInput): Date | string => {
+  if (!value) return EMPTY_PLACEHOLDER;
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed;
+};
+
+/** "2 days ago", "yesterday", "5 minutes ago", "just now" */
+export const formatRelativeTime = (value: DateInput): string => {
+  const parsed = parseOrFallback(value);
+  if (typeof parsed === "string") return parsed;
+
+  const diffMs = parsed.getTime() - Date.now();
+  const absDiffMs = Math.abs(diffMs);
+
+  for (const { unit, ms } of RELATIVE_TIME_UNITS) {
+    if (absDiffMs >= ms) {
+      return relativeTimeFormatter.format(Math.round(diffMs / ms), unit);
+    }
   }
 
-  return dateOnlyFormatter.format(parsedDate);
+  return "just now";
+};
+
+/** "June 21, 2026, 8:05 AM" */
+export const formatDateTime = (value: DateInput): string => {
+  const parsed = parseOrFallback(value);
+  return typeof parsed === "string" ? parsed : dateTimeFormatter.format(parsed);
+};
+
+/** "June 21, 2026" */
+export const formatDateOnly = (value: DateInput): string => {
+  const parsed = parseOrFallback(value);
+  return typeof parsed === "string" ? parsed : dateOnlyFormatter.format(parsed);
 };

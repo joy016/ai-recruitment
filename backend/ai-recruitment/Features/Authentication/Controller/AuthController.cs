@@ -30,6 +30,7 @@ namespace ai_recruitment.Features.Authentication.Controller
 
             var user = await _context.Users
                 .Include(u => u.Role)
+                .Include(u => u.Department)
                 .FirstOrDefaultAsync(u => u.Email == normalizedEmail);
 
             if (user == null || !user.IsActive)
@@ -67,7 +68,10 @@ namespace ai_recruitment.Features.Authentication.Controller
                     UpdatedAt = user.UpdatedAt,
                     RoleId = user.RoleId,
                     RoleName = user.Role.RoleName,
-                    InsertedBy = user.InsertedBy
+                    InsertedBy = user.InsertedBy,
+                    DepartmentName = user.Department?.DepartmentName,
+                    DepId = user.Department?.Id,
+                    PhotoUrl = user.PhotoUrl,
                 }
             });
         }

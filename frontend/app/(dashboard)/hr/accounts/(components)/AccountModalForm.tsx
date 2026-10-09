@@ -19,19 +19,16 @@ import {
 } from "@mui/material";
 import { Close } from "@mui/icons-material";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
-import { generateUniqueAccountEmail } from "../(constants)/constants";
+import {
+  EMPTY_ACCOUNT_FORM,
+  generateUniqueAccountEmail,
+} from "../(constants)/constants";
 import { AccountFormValues, Role } from "../(types)/account.types";
 import { editUser, getUser, insertUser } from "@/lib/api/user";
 import { capitalizeFirstLetter } from "@/utils/capitalize-letter";
 import { DEFAULT_PASSWORD } from "@/constant/default-pass";
 import { useAppSelector } from "@/lib/store/hooks";
-
-const emptyAccountForm: AccountFormValues = {
-  firstName: "",
-  lastName: "",
-  email: "",
-  role: { roleId: 0, roleName: "" },
-};
+import { Department } from "@/lib/types/department";
 
 type AccountModalFormProps = {
   open: boolean;
@@ -43,6 +40,7 @@ type AccountModalFormProps = {
   onSubmit: (values: AccountFormValues) => void;
   roles: Role[];
   userId: string;
+  department: Department[];
 };
 
 export default function AccountModalForm({
@@ -54,9 +52,10 @@ export default function AccountModalForm({
   onSubmit,
   roles,
   userId,
+  department,
 }: Readonly<AccountModalFormProps>) {
   const [accountForm, setAccountForm] = useState<AccountFormValues>(
-    () => initialValues ?? emptyAccountForm,
+    () => initialValues ?? EMPTY_ACCOUNT_FORM,
   );
   const [formError, setFormError] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -74,6 +73,10 @@ export default function AccountModalForm({
         lastName: user.lastName ?? "",
         email: user.email ?? "",
         role: { roleId: user.roleId, roleName: user.roleName },
+        department: {
+          id: user.depId,
+          departmentName: user.departmentName,
+        },
       });
     };
 
@@ -110,6 +113,11 @@ export default function AccountModalForm({
       return;
     }
 
+    if (!accountForm.department.id) {
+      setFormError("Please select a department.");
+      return;
+    }
+
     const finalValues: AccountFormValues = {
       ...accountForm,
       firstName: accountForm.firstName.trim(),
@@ -137,6 +145,7 @@ export default function AccountModalForm({
         lastName: capitalizeFirstLetter(accountForm.lastName),
         email: accountForm.email,
         roleId: accountForm.role.roleId,
+        depId: accountForm.department.id,
       });
     } else {
       const userPayload = {
@@ -146,6 +155,7 @@ export default function AccountModalForm({
         password: DEFAULT_PASSWORD,
         insertedBy: currentUser?.firstName! + currentUser?.lastName!,
         roleId: accountForm.role.roleId,
+        departmentId: accountForm.department.id,
       };
 
       await insertUser(userPayload);
@@ -259,6 +269,43 @@ export default function AccountModalForm({
               {roles.map((role) => (
                 <MenuItem key={role.roleId} value={role.roleId}>
                   {role.roleName}
+                </MenuItem>
+              ))}
+            </Select>
+          </Box>
+
+          <Box>
+            <Typography
+              variant="body2"
+              sx={{ color: "#52718c", mb: 0.6, fontWeight: 600 }}
+            >
+              Department
+            </Typography>
+            <Select
+              size="small"
+              value={accountForm.department.id || ""}
+              onChange={(event) => {
+                const selectedDepartmentId = Number(event.target.value);
+                const selectedDepartment = department.find(
+                  (d) => d.id === selectedDepartmentId,
+                );
+                if (!selectedDepartment) {
+                  return;
+                }
+
+                setAccountForm((current) => ({
+                  ...current,
+                  department: {
+                    id: selectedDepartment.id,
+                    departmentName: selectedDepartment.departmentName,
+                  },
+                }));
+              }}
+              fullWidth
+            >
+              {department.map((d) => (
+                <MenuItem key={d.id} value={d.id}>
+                  {d.departmentName}
                 </MenuItem>
               ))}
             </Select>

@@ -56,7 +56,22 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
+builder.Services.AddScoped(_ =>
+{
+    var supabaseUrl = builder.Configuration["Supabase:Url"];
+    if (string.IsNullOrWhiteSpace(supabaseUrl))
+        throw new InvalidOperationException("Supabase:Url configuration value is missing.");
+
+    var supabaseKey = builder.Configuration["Supabase:ServiceRoleKey"];
+    if (string.IsNullOrWhiteSpace(supabaseKey))
+        throw new InvalidOperationException("Supabase:ServiceRoleKey configuration value is missing.");
+
+    var client = new Supabase.Client(supabaseUrl, supabaseKey);
+    client.InitializeAsync().GetAwaiter().GetResult();
+    return client;
+});
 builder.Services.AddScoped<ITokenService, TokenService>();
+
 
 builder.Services.AddCors(options =>
 {

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 import {
   Alert,
   Box,
   Button,
   Chip,
-  MenuItem,
-  Select,
+  CircularProgress,
   Stack,
   TextField,
   Typography,
@@ -15,9 +15,31 @@ import {
 import { Edit } from "@mui/icons-material";
 import SettingsSection from "./SettingsSection";
 import ProfileAvatar from "./ProfileAvatar";
-import { DEPARTMENT_OPTIONS } from "../(constants)/constants";
 import { UserProfile } from "../(types)/settings.types";
 import { formatDateOnly } from "@/lib/utils/date";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { setUser } from "@/lib/store/features/userSlice";
+import { uploadProfilePhoto } from "@/lib/api/user";
+
+// Mirrors the validation in UsersController.UploadPhoto.
+const ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+
+const describePhotoUploadError = (error: unknown) => {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 413) {
+      return "Max file size is 2 MB.";
+    }
+    if (typeof error.response?.data === "string" && error.response.data) {
+      return error.response.data;
+    }
+  }
+  return "Failed to upload profile photo. Please try again.";
+};
+
+// Shows a short, readable ID (e.g. "EMP-1A2B3") instead of the full GUID.
+const formatEmployeeId = (id: string | undefined) =>
+  id ? `EMP-${id.replace(/-/g, "").slice(0, 5).toUpperCase()}` : "";
 
 type ProfileSettingsProps = {
   profile: UserProfile;
@@ -38,9 +60,48 @@ export default function ProfileSettings({
   profile,
   onSave,
 }: Readonly<ProfileSettingsProps>) {
+  const currentUser = useAppSelector((state) => state.user.currentUser);
   const [isEditing, setIsEditing] = useState(false);
   const [draftProfile, setDraftProfile] = useState<UserProfile>(profile);
   const [showSavedMessage, setShowSavedMessage] = useState(false);
+  const dispatch = useAppDispatch();
+  // The photo is only uploaded when "Save Changes" is clicked.
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [photoPreviewUrl]);
+
+  const clearPendingPhoto = () => {
+    setPendingPhoto(null);
+    setPhotoPreviewUrl(null);
+    setPhotoError(null);
+  };
+
+  const handlePhotoSelect = (file: File) => {
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError("Only JPEG, PNG, or WebP images are allowed.");
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setPhotoError("Max file size is 2 MB.");
+      return;
+    }
+
+    setPhotoError(null);
+    setPendingPhoto(file);
+    setPhotoPreviewUrl(URL.createObjectURL(file));
+  };
+
+  console.log({ currentUser });
 
   const handleFieldChange = (
     field: keyof Pick<
@@ -66,10 +127,34 @@ export default function ProfileSettings({
 
   const handleCancel = () => {
     setDraftProfile(profile);
+    clearPendingPhoto();
     setIsEditing(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (pendingPhoto) {
+      setIsSaving(true);
+      setPhotoError(null);
+      try {
+        const { photoUrl } = await uploadProfilePhoto(pendingPhoto);
+        if (currentUser) {
+          dispatch(setUser({ ...currentUser, photoUrl }));
+        }
+      } catch (error) {
+        console.error("Profile photo upload failed:", error);
+        setPhotoError(describePhotoUploadError(error));
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
+    setSavedMessage(
+      pendingPhoto
+        ? "Profile photo updated."
+        : "Profile changes saved locally. (Not yet connected to the backend.)",
+    );
+    clearPendingPhoto();
     onSave(draftProfile);
     setIsEditing(false);
     setShowSavedMessage(true);
@@ -86,12 +171,23 @@ export default function ProfileSettings({
               <Button
                 variant="text"
                 onClick={handleCancel}
+                disabled={isSaving}
                 sx={{ textTransform: "none" }}
               >
                 Cancel
               </Button>
-              <Button variant="contained" onClick={handleSave} sx={saveButtonSx}>
-                Save Changes
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={isSaving}
+                startIcon={
+                  isSaving ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : undefined
+                }
+                sx={saveButtonSx}
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </Stack>
           ) : (
@@ -112,7 +208,7 @@ export default function ProfileSettings({
             sx={{ mb: 2.5 }}
             onClose={() => setShowSavedMessage(false)}
           >
-            Profile changes saved locally. (Not yet connected to the backend.)
+            {savedMessage}
           </Alert>
         )}
 
@@ -126,17 +222,37 @@ export default function ProfileSettings({
           }}
         >
           <ProfileAvatar
-            firstName={draftProfile.firstName}
-            lastName={draftProfile.lastName}
-            editable={isEditing}
+            firstName={currentUser?.firstName ?? draftProfile.firstName}
+            lastName={currentUser?.lastName ?? draftProfile.lastName}
+            photoUrl={photoPreviewUrl ?? currentUser?.photoUrl}
+            editable={isEditing && !isSaving}
+            accept={ALLOWED_PHOTO_TYPES.join(",")}
+            onFileSelect={handlePhotoSelect}
           />
           <Box>
-            <Typography sx={{ fontWeight: 700, color: "#17456a", fontSize: "1.1rem" }}>
-              {draftProfile.firstName} {draftProfile.lastName}
+            <Typography
+              sx={{ fontWeight: 700, color: "#17456a", fontSize: "1.1rem" }}
+            >
+              {currentUser?.firstName} {currentUser?.lastName}
             </Typography>
             <Typography variant="body2" sx={{ color: "#5f7f96" }}>
-              {draftProfile.jobTitle}
+              {currentUser?.roleName}
             </Typography>
+            {isEditing && (
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "block",
+                  mt: 0.5,
+                  color: photoError ? "error.main" : "#7893a8",
+                }}
+              >
+                {photoError ??
+                  (pendingPhoto
+                    ? `New photo selected: ${pendingPhoto.name}. Click Save Changes to upload.`
+                    : "JPEG, PNG, or WebP, up to 2 MB.")}
+              </Typography>
+            )}
           </Box>
         </Box>
 
@@ -150,77 +266,64 @@ export default function ProfileSettings({
           <TextField
             size="small"
             label="First Name"
-            value={draftProfile.firstName}
-            onChange={(event) => handleFieldChange("firstName", event.target.value)}
-            disabled={!isEditing}
+            value={currentUser?.firstName}
+            onChange={(event) =>
+              handleFieldChange("firstName", event.target.value)
+            }
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Last Name"
-            value={draftProfile.lastName}
-            onChange={(event) => handleFieldChange("lastName", event.target.value)}
-            disabled={!isEditing}
+            value={currentUser?.lastName}
+            onChange={(event) =>
+              handleFieldChange("lastName", event.target.value)
+            }
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Email Address"
             type="email"
-            value={draftProfile.email}
+            value={currentUser?.email}
             onChange={(event) => handleFieldChange("email", event.target.value)}
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Phone Number"
-            value={draftProfile.phoneNumber}
-            onChange={(event) =>
-              handleFieldChange("phoneNumber", event.target.value)
-            }
+            value={currentUser?.phoneNumber ?? ""}
             disabled={!isEditing}
             fullWidth
           />
           <TextField
             size="small"
             label="Job Title"
-            value={draftProfile.jobTitle}
-            onChange={(event) => handleFieldChange("jobTitle", event.target.value)}
-            disabled={!isEditing}
+            value={currentUser?.roleName}
+            disabled
             fullWidth
           />
-          <Box>
-            <Typography
-              variant="body2"
-              sx={{ color: "#52718c", mb: 0.6, fontWeight: 600 }}
-            >
-              Department
-            </Typography>
-            <Select
-              size="small"
-              value={draftProfile.department}
-              onChange={(event) =>
-                handleFieldChange("department", event.target.value as string)
-              }
-              disabled={!isEditing}
-              fullWidth
-            >
-              {DEPARTMENT_OPTIONS.map((department) => (
-                <MenuItem key={department} value={department}>
-                  {department}
-                </MenuItem>
-              ))}
-            </Select>
-          </Box>
+          <TextField
+            size="small"
+            label="Department"
+            value={currentUser?.departmentName}
+            onChange={(event) =>
+              handleFieldChange("jobTitle", event.target.value)
+            }
+            disabled
+            fullWidth
+          />
           <TextField
             size="small"
             label="Employee ID"
-            value={draftProfile.employeeId}
+            value={formatEmployeeId(currentUser?.id)}
             onChange={(event) =>
               handleFieldChange("employeeId", event.target.value)
             }
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
         </Box>
@@ -242,7 +345,7 @@ export default function ProfileSettings({
               Role
             </Typography>
             <Typography sx={{ fontWeight: 700, color: "#264a66", mt: 0.5 }}>
-              {profile.role}
+              {currentUser?.roleName}
             </Typography>
           </Box>
           <Box>
@@ -251,13 +354,12 @@ export default function ProfileSettings({
             </Typography>
             <Chip
               size="small"
-              label={profile.accountStatus}
+              label={currentUser?.isActive ? "Active" : "Inactive"}
               sx={{
                 mt: 0.6,
                 fontWeight: 600,
-                color: profile.accountStatus === "Active" ? "#1c8758" : "#8a8f98",
-                bgcolor:
-                  profile.accountStatus === "Active" ? "#e8f7ef" : "#eef1f4",
+                color: currentUser?.isActive ? "#1c8758" : "#8a8f98",
+                bgcolor: currentUser?.isActive ? "#e8f7ef" : "#eef1f4",
               }}
             />
           </Box>
@@ -266,7 +368,7 @@ export default function ProfileSettings({
               Date Joined
             </Typography>
             <Typography sx={{ fontWeight: 700, color: "#264a66", mt: 0.5 }}>
-              {formatDateOnly(profile.dateJoined)}
+              {formatDateOnly(currentUser?.createdAt)}
             </Typography>
           </Box>
         </Box>

@@ -4,6 +4,7 @@ import {
   EditUserPayload,
   GetUsersPayload,
   GetUsersResponse,
+  UploadPhotoResponse,
   UserItem,
   UserPayload,
 } from "../types/user";
@@ -45,4 +46,17 @@ export const updateUserStatus = async (id: string, status: boolean) => {
 
 export const editUser = async (id: string, payload: EditUserPayload) => {
   return api.put(`${USER_ENDPOINT}/editUser/${id}`, payload);
+};
+
+export const uploadProfilePhoto = async (
+  file: File,
+): Promise<UploadPhotoResponse> => {
+  const formData = new FormData();
+  // Must match the IFormFile parameter name in UsersController.UploadPhoto.
+  formData.append("file", file);
+  return api.post<UploadPhotoResponse, FormData>(
+    `${USER_ENDPOINT}/me/photo`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
 };

@@ -17,11 +17,17 @@ export type SelectedRole = {
   roleName: string;
 };
 
+export type SelectedDepartment = {
+  id: number;
+  departmentName: string;
+};
+
 export type AccountFormValues = {
   firstName: string;
   lastName: string;
   email: string;
   role: SelectedRole;
+  department: SelectedDepartment;
 };
 
 export type Role = {

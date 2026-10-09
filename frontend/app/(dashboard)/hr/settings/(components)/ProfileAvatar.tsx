@@ -1,44 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Avatar, Box, IconButton } from "@mui/material";
 import { PhotoCamera } from "@mui/icons-material";
 
 type ProfileAvatarProps = {
   firstName: string;
   lastName: string;
+  /** Saved photo URL or a local preview of a not-yet-saved file. */
+  photoUrl?: string | null;
   editable?: boolean;
+  accept?: string;
+  onFileSelect?: (file: File) => void;
 };
 
 export default function ProfileAvatar({
   firstName,
   lastName,
+  photoUrl,
   editable = false,
+  accept = "image/*",
+  onFileSelect,
 }: Readonly<ProfileAvatarProps>) {
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-
-  useEffect(() => {
-    return () => {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-    };
-  }, [previewUrl]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) {
-      return;
+    // Reset so picking the same file again still fires onChange.
+    event.target.value = "";
+    if (file) {
+      onFileSelect?.(file);
     }
-
-    setPreviewUrl(URL.createObjectURL(file));
   };
 
   return (
     <Box sx={{ position: "relative", width: 88, height: 88 }}>
       <Avatar
-        src={previewUrl ?? undefined}
+        src={photoUrl ?? undefined}
+        alt={`${firstName} ${lastName}`}
         sx={{
           width: 88,
           height: 88,
@@ -47,7 +45,7 @@ export default function ProfileAvatar({
           bgcolor: "#1f80b6",
         }}
       >
-        {!previewUrl && initials}
+        {initials}
       </Avatar>
       {editable && (
         <IconButton
@@ -64,12 +62,7 @@ export default function ProfileAvatar({
           }}
         >
           <PhotoCamera fontSize="small" sx={{ color: "#1f80b6" }} />
-          <input
-            hidden
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-          />
+          <input hidden type="file" accept={accept} onChange={handleFileChange} />
         </IconButton>
       )}
     </Box>

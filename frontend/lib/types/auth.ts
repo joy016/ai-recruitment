@@ -8,7 +8,16 @@ export interface AuthUser {
   firstName: string;
   lastName: string;
   email: string;
-  role: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  roleId: number;
+  roleName: string;
+  insertedBy: string;
+  depId: number;
+  departmentName: string;
+  phoneNumber: string;
+  photoUrl?: string | null;
 }
 
 export interface LoginResponse {

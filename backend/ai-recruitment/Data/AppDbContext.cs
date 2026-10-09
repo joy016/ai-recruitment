@@ -1,5 +1,6 @@
 ﻿using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.Departments.Model;
 using ai_recruitment.Features.JobPosts.Model;
 using ai_recruitment.Features.Permissions.Model;
 using ai_recruitment.Features.Roles.Model;
@@ -25,7 +26,7 @@ namespace ai_recruitment.Data
         public DbSet<User> Users => Set<User>();
         public DbSet<Role> Roles => Set<Role>();
         public DbSet<Permission> Permissions => Set<Permission>();
-
+        public DbSet<Department> Departments => Set<Department>();
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             // GUID default for applicant id
@@ -63,9 +64,19 @@ namespace ai_recruitment.Data
                 .HasForeignKey(p => p.RoleId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            // one Department -> many Users
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Department)
+                .WithMany(d => d.Users)
+                .HasForeignKey(u => u.DepartmentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
                 .IsUnique();
+            modelBuilder.Entity<User>()
+                .Property(u => u.PhoneNumber)
+                .HasMaxLength(20);
 
             modelBuilder.Entity<Role>()
                 .HasIndex(r => r.RoleName)
@@ -151,9 +162,23 @@ namespace ai_recruitment.Data
                     InsertedBy = "system-seed",
                     IsActive = true,
                     CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
-                    RoleId = 1
+                    RoleId = 1,
+                    DepartmentId = 2
                 }
             );
+
+            modelBuilder.Entity<Department>().HasData(
+                new Department { Id = 1, DepartmentName = "Human Resources" },
+                new Department { Id = 2, DepartmentName = "Information Technology" },
+                new Department { Id = 3, DepartmentName = "Finance and Accounting" },
+                new Department { Id = 4, DepartmentName = "Sales" },
+                new Department { Id = 5, DepartmentName = "Marketing" },
+                new Department { Id = 6, DepartmentName = "Operations" },
+                new Department { Id = 7, DepartmentName = "Customer Support" },
+                new Department { Id = 8, DepartmentName = "Engineering" },
+                new Department { Id = 9, DepartmentName = "Product Management" },
+                new Department { Id = 10, DepartmentName = "Administration" }
+                );
         }
     }
 }

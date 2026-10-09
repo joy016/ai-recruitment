@@ -5,6 +5,7 @@ export interface UserPayload {
   password: string;
   insertedBy: string;
   roleId: number;
+  departmentId: number;
 }
 
 export interface GetUsersPayload {
@@ -25,6 +26,8 @@ export interface UserItem {
   roleId: number;
   roleName: string;
   insertedBy: string;
+  depId: number;
+  departmentName: string;
 }
 
 export interface GetUsersResponse {
@@ -40,6 +43,11 @@ export interface EditUserPayload {
   lastName: string;
   email: string;
   roleId: number;
+  depId: number;
+}
+
+export interface UploadPhotoResponse {
+  photoUrl: string;
 }
 
 export interface Interviewer {

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace ai_recruitment.Features.Users.Controller
 {
@@ -13,11 +14,13 @@ namespace ai_recruitment.Features.Users.Controller
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly Supabase.Client _supabase;
         private readonly PasswordHasher<Model.User> _passwordHasher = new();
 
-        public UsersController(AppDbContext context)
+        public UsersController(AppDbContext context, Supabase.Client supabase)
         {
             _context = context;
+            _supabase = supabase; 
         }
 
         [HttpPost("insertUser")]
@@ -52,6 +55,7 @@ namespace ai_recruitment.Features.Users.Controller
                 Email = normalizedEmail,
                 InsertedBy = dto.InsertedBy,
                 RoleId = dto.RoleId,
+                DepartmentId = dto.DepartmentId,
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
@@ -100,7 +104,10 @@ namespace ai_recruitment.Features.Users.Controller
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId, 
                     RoleName = u.Role.RoleName,
-                    InsertedBy =u.InsertedBy
+                    InsertedBy =u.InsertedBy,
+                    DepId = u.DepartmentId,
+                    DepartmentName = u.Department.DepartmentName,
+                    PhoneNumber = u.PhoneNumber,
                 })               
                 .ToListAsync();
 
@@ -130,7 +137,11 @@ namespace ai_recruitment.Features.Users.Controller
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId,
                     RoleName = u.Role.RoleName, 
-                    InsertedBy = u.InsertedBy
+                    InsertedBy = u.InsertedBy,
+                    DepId = u.DepartmentId,
+                    DepartmentName = u.Department.DepartmentName,
+                    PhoneNumber = u.PhoneNumber,
+
                 })
                 .FirstOrDefaultAsync();
 
@@ -184,6 +195,7 @@ namespace ai_recruitment.Features.Users.Controller
             user.LastName = dto.LastName;
             user.Email = normalizedEmail;
             user.RoleId = dto.RoleId;
+            user.DepartmentId = dto.DepId;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -217,6 +229,70 @@ namespace ai_recruitment.Features.Users.Controller
                 statusCode = 200,
                 statusMessage = "User status updated successfully."
             });
+        }
+
+
+        [HttpPost("me/photo")]
+        [Authorize]
+        [RequestSizeLimit(2 * 1024 * 1024)]
+        public async Task<IActionResult> UploadPhoto(IFormFile file)
+        {
+            var allowed = new[] { "image/jpeg", "image/png", "image/webp" };
+
+            if (file is null || file.Length == 0)
+                return BadRequest("No file provided.");
+            if (file.Length > 2 * 1024 * 1024)
+                return BadRequest("Max file size is 2 MB.");
+            if (!allowed.Contains(file.ContentType))
+                return BadRequest("Only JPEG, PNG, or WebP images are allowed.");
+
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
+            var user = await _context.Users.FindAsync(Guid.Parse(userId));
+            if (user is null) return NotFound();
+
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            // Unique name per upload avoids stale browser/CDN caching
+            var path = $"{userId}/{Guid.NewGuid():N}{ext}";
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+
+            var bucket = _supabase.Storage.From("avatars");
+            var previousPhotoUrl = user.PhotoUrl;
+
+            try
+            {
+                await bucket.Upload(ms.ToArray(), path,
+                    new Supabase.Storage.FileOptions { ContentType = file.ContentType });
+            }
+            catch (Supabase.Storage.Exceptions.SupabaseStorageException ex)
+            {
+                return StatusCode(502, new { message = $"Photo upload failed: {ex.Message}" });
+            }
+
+            user.PhotoUrl = bucket.GetPublicUrl(path);
+            await _context.SaveChangesAsync();
+
+            // Clean up the old photo; a failure here shouldn't fail the request
+            // since the new photo is already uploaded and saved.
+            if (!string.IsNullOrEmpty(previousPhotoUrl))
+            {
+                var marker = "/avatars/";
+                var idx = previousPhotoUrl.IndexOf(marker, StringComparison.Ordinal);
+                if (idx >= 0)
+                {
+                    try
+                    {
+                        await bucket.Remove(previousPhotoUrl[(idx + marker.Length)..]);
+                    }
+                    catch (Supabase.Storage.Exceptions.SupabaseStorageException)
+                    {
+                        // Old file removal is best-effort; orphaned files don't affect correctness.
+                    }
+                }
+            }
+
+            return Ok(new { photoUrl = user.PhotoUrl });
         }
     }
 }

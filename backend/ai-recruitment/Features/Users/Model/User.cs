@@ -1,4 +1,5 @@
 using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.Departments.Model;
 using ai_recruitment.Features.Roles.Model;
 using System.ComponentModel.DataAnnotations;
 
@@ -38,11 +39,20 @@ namespace ai_recruitment.Features.Users.Model
 
         public DateTime? ResetPasswordTokenExpiresAt { get; set; }
 
+        [MaxLength(20)]
+        [Phone]
+        public string? PhoneNumber { get; set; }
+        public string? PhotoUrl { get; set; }
+
         // Navigation: one role -> many users
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 
+        public int? DepartmentId { get; set; }
+        public Department? Department { get; set; }
+
         public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
+
 
     }
 }
