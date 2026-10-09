@@ -101,8 +101,6 @@ export default function ProfileSettings({
     setPhotoPreviewUrl(URL.createObjectURL(file));
   };
 
-  console.log({ currentUser });
-
   const handleFieldChange = (
     field: keyof Pick<
       UserProfile,
