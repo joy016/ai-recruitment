@@ -4,6 +4,7 @@ import {
   EditUserPayload,
   GetUsersPayload,
   GetUsersResponse,
+  UploadPhotoResponse,
   UserItem,
   UserPayload,
 } from "../types/user";
@@ -45,4 +46,15 @@ export const updateUserStatus = async (id: string, status: boolean) => {
 
 export const editUser = async (id: string, payload: EditUserPayload) => {
   return api.put(`${USER_ENDPOINT}/editUser/${id}`, payload);
+};
+
+export const uploadProfilePicture = async (id: string, file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return api.post<UploadPhotoResponse, FormData>(
+    `${USER_ENDPOINT}/uploadProfilePicture/${id}`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
 };

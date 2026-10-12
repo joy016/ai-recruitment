@@ -600,6 +600,9 @@ namespace ai_recruitment.Migrations
                         .HasMaxLength(15)
                         .HasColumnType("character varying(15)");
 
+                    b.Property<string>("ProfilePictureUrl")
+                        .HasColumnType("text");
+
                     b.Property<DateTime?>("ResetPasswordTokenExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -630,7 +633,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             DepartmentId = 2,
                             Email = "joy.developer@ai-recruitment.local",
-                            EmployeeNumber = "EMP-JD-583921",
+                            EmployeeNumber = "EMP-JD583921",
                             FirstName = "Joy",
                             InsertedBy = "system-seed",
                             IsActive = true,

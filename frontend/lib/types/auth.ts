@@ -4,11 +4,21 @@ export interface LoginPayload {
 }
 
 export interface AuthUser {
-  id: string;
-  firstName: string;
-  lastName: string;
+  createdAt: string;
+  depId: number;
+  departmentName: string;
   email: string;
-  role: string;
+  employeeNumber: string;
+  firstName: string;
+  id: string;
+  insertedBy: string;
+  isActive: boolean;
+  lastName: string;
+  phoneNumber: string;
+  profilePictureUrl?: string | null;
+  roleId: number;
+  roleName: string;
+  updatedAt: string | null;
 }
 
 export interface LoginResponse {

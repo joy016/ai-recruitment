@@ -73,6 +73,7 @@ namespace ai_recruitment.Features.Authentication.Controller
                     DepartmentName = user.Department?.DepartmentName,
                     PhoneNumber = user.PhoneNumber,
                     EmployeeNumber = user.EmployeeNumber,
+                    ProfilePictureUrl = user.ProfilePictureUrl,
                 }
             });
         }

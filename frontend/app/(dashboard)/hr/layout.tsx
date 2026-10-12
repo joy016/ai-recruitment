@@ -242,6 +242,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
                 sx={{ p: 0.4 }}
               >
                 <Avatar
+                  src={currentUser?.profilePictureUrl ?? undefined}
                   sx={{
                     width: 36,
                     height: 36,

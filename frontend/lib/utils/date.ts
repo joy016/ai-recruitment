@@ -71,8 +71,11 @@ const dateOnlyFormatter = new Intl.DateTimeFormat("en-US", {
  * Formats an ISO date string as "June 21, 2026". Falls back to the raw value
  * if it can't be parsed.
  */
-export const formatDateOnly = (value: string): string => {
+export const formatDateOnly = (value?: string): string => {
+  if (!value) return "N/A";
+
   const parsedDate = new Date(value);
+
   if (Number.isNaN(parsedDate.getTime())) {
     return value;
   }

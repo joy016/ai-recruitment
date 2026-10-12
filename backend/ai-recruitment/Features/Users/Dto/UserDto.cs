@@ -16,7 +16,6 @@ namespace ai_recruitment.Features.Users.Dto
         public string? DepartmentName { get; set; }
         public string PhoneNumber { get; set; } = string.Empty;
         public string EmployeeNumber { get; set; } = string.Empty;
-
-
+        public string? ProfilePictureUrl { get; set; }
     }
 }

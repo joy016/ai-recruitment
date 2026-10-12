@@ -1,5 +1,6 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.Users.Dto;
+using ai_recruitment.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -12,12 +13,21 @@ namespace ai_recruitment.Features.Users.Controller
     [Authorize]
     public class UsersController : ControllerBase
     {
+        private const string AvatarsBucket = "avatars";
+        private static readonly string[] AllowedImageContentTypes =
+        {
+            "image/jpeg", "image/png", "image/webp", "image/gif"
+        };
+        private const long MaxAvatarFileSize = 5 * 1024 * 1024; // 5MB
+
         private readonly AppDbContext _context;
+        private readonly ISupabaseStorageService _supabaseStorageService;
         private readonly PasswordHasher<Model.User> _passwordHasher = new();
 
-        public UsersController(AppDbContext context)
+        public UsersController(AppDbContext context, ISupabaseStorageService supabaseStorageService)
         {
             _context = context;
+            _supabaseStorageService = supabaseStorageService;
         }
 
 
@@ -136,7 +146,10 @@ namespace ai_recruitment.Features.Users.Controller
                     RoleName = u.Role.RoleName,
                     InsertedBy =u.InsertedBy,
                     DepId = u.DepartmentId,
-                    DepartmentName = u.Department != null ? u.Department.DepartmentName : null
+                    DepartmentName = u.Department != null ? u.Department.DepartmentName : null,
+                    PhoneNumber = u.PhoneNumber,
+                    EmployeeNumber = u.EmployeeNumber,
+                    ProfilePictureUrl = u.ProfilePictureUrl
                 })
                 .ToListAsync();
 
@@ -168,7 +181,10 @@ namespace ai_recruitment.Features.Users.Controller
                     RoleName = u.Role.RoleName,
                     InsertedBy = u.InsertedBy,
                     DepId = u.DepartmentId,
-                    DepartmentName = u.Department != null ? u.Department.DepartmentName : null
+                    DepartmentName = u.Department != null ? u.Department.DepartmentName : null,
+                    PhoneNumber = u.PhoneNumber,
+                    EmployeeNumber = u.EmployeeNumber,
+                    ProfilePictureUrl = u.ProfilePictureUrl
                 })
                 .FirstOrDefaultAsync();
 
@@ -232,6 +248,49 @@ namespace ai_recruitment.Features.Users.Controller
                 statusCode = 200,
                 statusMessage = "User updated successfully."
             });
+        }
+
+        [HttpPost("uploadProfilePicture/{id:guid}")]
+        public async Task<IActionResult> UploadProfilePicture(Guid id, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { message = "A profile picture file is required." });
+            }
+
+            if (file.Length > MaxAvatarFileSize)
+            {
+                return BadRequest(new { message = "Profile picture file size cannot exceed 5MB." });
+            }
+
+            if (!AllowedImageContentTypes.Contains(file.ContentType))
+            {
+                return BadRequest(new { message = "Profile picture must be a JPEG, PNG, WEBP, or GIF image." });
+            }
+
+            var user = await _context.Users.FindAsync(id);
+            if (user == null)
+            {
+                return NotFound(new { message = "User not found." });
+            }
+
+            var extension = Path.GetExtension(file.FileName);
+            var path = $"{id}{extension}";
+
+            string photoUrl;
+            await using (var stream = file.OpenReadStream())
+            {
+                photoUrl = await _supabaseStorageService.UploadAsync(AvatarsBucket, path, stream, file.ContentType);
+            }
+
+            user.UpdatedAt = DateTime.UtcNow;
+            // Cache-bust: the storage path is stable across re-uploads (same extension
+            // overwrites via upsert), so without this browsers keep showing the old image.
+            photoUrl = $"{photoUrl}?v={user.UpdatedAt.Value.Ticks}";
+            user.ProfilePictureUrl = photoUrl;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { photoUrl });
         }
 
         [HttpPut("updateUserStatus/{id:guid}")]

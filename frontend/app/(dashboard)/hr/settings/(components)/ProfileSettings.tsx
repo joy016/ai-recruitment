@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
   Button,
   Chip,
-  MenuItem,
-  Select,
   Stack,
   TextField,
   Typography,
@@ -15,9 +13,11 @@ import {
 import { Edit } from "@mui/icons-material";
 import SettingsSection from "./SettingsSection";
 import ProfileAvatar from "./ProfileAvatar";
-import { DEPARTMENT_OPTIONS } from "../(constants)/constants";
 import { UserProfile } from "../(types)/settings.types";
 import { formatDateOnly } from "@/lib/utils/date";
+import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
+import { setUser } from "@/lib/store/features/userSlice";
+import { uploadProfilePicture } from "@/lib/api/user";
 
 type ProfileSettingsProps = {
   profile: UserProfile;
@@ -41,6 +41,41 @@ export default function ProfileSettings({
   const [isEditing, setIsEditing] = useState(false);
   const [draftProfile, setDraftProfile] = useState<UserProfile>(profile);
   const [showSavedMessage, setShowSavedMessage] = useState(false);
+
+  const currentUser = useAppSelector((state) => state.user.currentUser);
+  const dispatch = useAppDispatch();
+
+  // The photo is only uploaded when "Save Changes" is clicked.
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreviewUrl) {
+        URL.revokeObjectURL(photoPreviewUrl);
+      }
+    };
+  }, [photoPreviewUrl]);
+
+  const handlePhotoSelect = (file: File) => {
+    setPhotoError(null);
+    setPendingPhoto(file);
+    setPhotoPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const clearPendingPhoto = () => {
+    setPendingPhoto(null);
+    setPhotoPreviewUrl(null);
+  };
+
+  const handlePhotoUploaded = (photoUrl: string) => {
+    if (!currentUser) {
+      return;
+    }
+    dispatch(setUser({ ...currentUser, profilePictureUrl: photoUrl }));
+  };
 
   const handleFieldChange = (
     field: keyof Pick<
@@ -66,10 +101,26 @@ export default function ProfileSettings({
 
   const handleCancel = () => {
     setDraftProfile(profile);
+    clearPendingPhoto();
+    setPhotoError(null);
     setIsEditing(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (pendingPhoto && currentUser) {
+      setIsSaving(true);
+      try {
+        const response = await uploadProfilePicture(currentUser.id, pendingPhoto);
+        handlePhotoUploaded(response.photoUrl);
+        clearPendingPhoto();
+      } catch {
+        setPhotoError("Failed to upload profile picture. Please try again.");
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
+
     onSave(draftProfile);
     setIsEditing(false);
     setShowSavedMessage(true);
@@ -86,6 +137,7 @@ export default function ProfileSettings({
               <Button
                 variant="text"
                 onClick={handleCancel}
+                disabled={isSaving}
                 sx={{ textTransform: "none" }}
               >
                 Cancel
@@ -93,9 +145,10 @@ export default function ProfileSettings({
               <Button
                 variant="contained"
                 onClick={handleSave}
+                disabled={isSaving}
                 sx={saveButtonSx}
               >
-                Save Changes
+                {isSaving ? "Saving..." : "Save Changes"}
               </Button>
             </Stack>
           ) : (
@@ -120,6 +173,16 @@ export default function ProfileSettings({
           </Alert>
         )}
 
+        {photoError && (
+          <Alert
+            severity="error"
+            sx={{ mb: 2.5 }}
+            onClose={() => setPhotoError(null)}
+          >
+            {photoError}
+          </Alert>
+        )}
+
         <Box
           sx={{
             display: "flex",
@@ -130,18 +193,23 @@ export default function ProfileSettings({
           }}
         >
           <ProfileAvatar
-            firstName={draftProfile.firstName}
-            lastName={draftProfile.lastName}
-            editable={isEditing}
+            userId={currentUser?.id ?? ""}
+            firstName={currentUser?.firstName ?? ""}
+            lastName={currentUser?.lastName ?? ""}
+            photoUrl={photoPreviewUrl ?? currentUser?.profilePictureUrl}
+            editable={isEditing && !isSaving}
+            onUploaded={handlePhotoUploaded}
+            onFileSelected={handlePhotoSelect}
+            uploading={isSaving}
           />
           <Box>
             <Typography
               sx={{ fontWeight: 700, color: "#17456a", fontSize: "1.1rem" }}
             >
-              {draftProfile.firstName} {draftProfile.lastName}
+              {currentUser?.firstName} {currentUser?.lastName}
             </Typography>
             <Typography variant="body2" sx={{ color: "#5f7f96" }}>
-              {draftProfile.jobTitle}
+              {currentUser?.roleName}
             </Typography>
           </Box>
         </Box>
@@ -156,7 +224,7 @@ export default function ProfileSettings({
           <TextField
             size="small"
             label="First Name"
-            value={draftProfile.firstName}
+            value={currentUser?.firstName}
             onChange={(event) =>
               handleFieldChange("firstName", event.target.value)
             }
@@ -166,7 +234,7 @@ export default function ProfileSettings({
           <TextField
             size="small"
             label="Last Name"
-            value={draftProfile.lastName}
+            value={currentUser?.lastName}
             onChange={(event) =>
               handleFieldChange("lastName", event.target.value)
             }
@@ -177,7 +245,7 @@ export default function ProfileSettings({
             size="small"
             label="Email Address"
             type="email"
-            value={draftProfile.email}
+            value={currentUser?.email}
             onChange={(event) => handleFieldChange("email", event.target.value)}
             disabled={!isEditing}
             fullWidth
@@ -185,7 +253,7 @@ export default function ProfileSettings({
           <TextField
             size="small"
             label="Phone Number"
-            value={draftProfile.phoneNumber}
+            value={currentUser?.phoneNumber}
             onChange={(event) =>
               handleFieldChange("phoneNumber", event.target.value)
             }
@@ -195,40 +263,27 @@ export default function ProfileSettings({
           <TextField
             size="small"
             label="Job Title"
-            value={draftProfile.jobTitle}
+            value={currentUser?.roleName}
             onChange={(event) =>
               handleFieldChange("jobTitle", event.target.value)
             }
             disabled={!isEditing}
             fullWidth
           />
-          <Box>
-            <Typography
-              variant="body2"
-              sx={{ color: "#52718c", mb: 0.6, fontWeight: 600 }}
-            >
-              Department
-            </Typography>
-            <Select
-              size="small"
-              value={draftProfile.department}
-              onChange={(event) =>
-                handleFieldChange("department", event.target.value as string)
-              }
-              disabled={!isEditing}
-              fullWidth
-            >
-              {DEPARTMENT_OPTIONS.map((department) => (
-                <MenuItem key={department} value={department}>
-                  {department}
-                </MenuItem>
-              ))}
-            </Select>
-          </Box>
+          <TextField
+            size="small"
+            label="Department"
+            value={currentUser?.departmentName}
+            onChange={(event) =>
+              handleFieldChange("jobTitle", event.target.value)
+            }
+            disabled={!isEditing}
+            fullWidth
+          />
           <TextField
             size="small"
             label="Employee ID"
-            value={draftProfile.employeeId}
+            value={currentUser?.employeeNumber}
             onChange={(event) =>
               handleFieldChange("employeeId", event.target.value)
             }
@@ -254,7 +309,7 @@ export default function ProfileSettings({
               Role
             </Typography>
             <Typography sx={{ fontWeight: 700, color: "#264a66", mt: 0.5 }}>
-              {profile.role}
+              {currentUser?.roleName}
             </Typography>
           </Box>
           <Box>
@@ -263,14 +318,12 @@ export default function ProfileSettings({
             </Typography>
             <Chip
               size="small"
-              label={profile.accountStatus}
+              label={currentUser?.isActive ? "Active" : "Inactive"}
               sx={{
                 mt: 0.6,
                 fontWeight: 600,
-                color:
-                  profile.accountStatus === "Active" ? "#1c8758" : "#8a8f98",
-                bgcolor:
-                  profile.accountStatus === "Active" ? "#e8f7ef" : "#eef1f4",
+                color: currentUser?.isActive ? "#1c8758" : "#8a8f98",
+                bgcolor: currentUser?.isActive ? "#e8f7ef" : "#eef1f4",
               }}
             />
           </Box>
@@ -279,7 +332,7 @@ export default function ProfileSettings({
               Date Joined
             </Typography>
             <Typography sx={{ fontWeight: 700, color: "#264a66", mt: 0.5 }}>
-              {formatDateOnly(profile.dateJoined)}
+              {formatDateOnly(currentUser?.createdAt)}
             </Typography>
           </Box>
         </Box>

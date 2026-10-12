@@ -45,6 +45,8 @@ namespace ai_recruitment.Features.Users.Model
         public string PhoneNumber { get; set; } = string.Empty;
         public string EmployeeNumber { get; set; } = string.Empty;
 
+        public string? ProfilePictureUrl { get; set; }
+
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 

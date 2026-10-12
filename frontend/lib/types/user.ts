@@ -27,6 +27,7 @@ export interface UserItem {
   insertedBy: string;
   depId: number;
   departmentName: string;
+  profilePictureUrl?: string | null;
 }
 
 export interface GetUsersResponse {

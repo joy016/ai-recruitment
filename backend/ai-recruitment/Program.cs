@@ -93,6 +93,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<ISupabaseStorageService, SupabaseStorageService>();
 
 var app = builder.Build();
 

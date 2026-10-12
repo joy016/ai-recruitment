@@ -6,7 +6,6 @@ import {
   LockOutlined,
   NotificationsNoneOutlined,
   SecurityOutlined,
-  TuneOutlined,
 } from "@mui/icons-material";
 import { SettingsSectionKey } from "../(types)/settings.types";
 
@@ -15,14 +14,22 @@ const SETTINGS_TABS: {
   label: string;
   icon: React.ReactElement;
 }[] = [
-  { key: "profile", label: "Profile", icon: <AccountCircleOutlined fontSize="small" /> },
-  { key: "security", label: "Security", icon: <LockOutlined fontSize="small" /> },
+  {
+    key: "profile",
+    label: "Profile",
+    icon: <AccountCircleOutlined fontSize="small" />,
+  },
+  {
+    key: "security",
+    label: "Security",
+    icon: <LockOutlined fontSize="small" />,
+  },
   {
     key: "notifications",
     label: "Notifications",
     icon: <NotificationsNoneOutlined fontSize="small" />,
   },
-  { key: "preferences", label: "Preferences", icon: <TuneOutlined fontSize="small" /> },
+  // { key: "preferences", label: "Preferences", icon: <TuneOutlined fontSize="small" /> },
   {
     key: "permissions",
     label: "Access & Permissions",
