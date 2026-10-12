@@ -40,4 +40,9 @@ export interface EditUserPayload {
   lastName: string;
   email: string;
   roleId: number;
+  depId: number;
+}
+
+export interface UploadPhotoResponse {
+  photoUrl: string;
 }

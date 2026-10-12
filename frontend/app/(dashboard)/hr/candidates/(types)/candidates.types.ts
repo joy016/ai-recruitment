@@ -48,6 +48,14 @@ export interface GetNewCandidatesResponse {
   totalPages: number;
 }
 
+export interface GetNewCandidatesResponse {
+  data: NewCandidates[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface CandidatesInterviewToday {
   candidateId: string;
   candidateName: string;
