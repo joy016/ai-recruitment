@@ -48,7 +48,7 @@ namespace ai_recruitment.Features.Users.Controller
                 });
             }
 
-            // Generate Employee ID: EMP-EL-123456
+            // Generate Employee ID: EMP-EL123456
             if (string.IsNullOrWhiteSpace(dto.FirstName) ||
                 string.IsNullOrWhiteSpace(dto.LastName))
             {
@@ -69,7 +69,7 @@ namespace ai_recruitment.Features.Users.Controller
             {
                 int randomNumber = Random.Shared.Next(100000, 1000000);
 
-                employeeId = $"EMP-{initials}-{randomNumber}";
+                employeeId = $"EMP-{initials}{randomNumber}";
 
                 employeeIdExists = await _context.Users
                     .AnyAsync(u => u.EmployeeNumber == employeeId);

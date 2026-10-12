@@ -153,7 +153,7 @@ namespace ai_recruitment.Data
             new User
             {
                 Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                EmployeeNumber = "EMP-JD-583921",
+                EmployeeNumber = "EMP-JD583921",
                 FirstName = "Joy",
                 LastName = "Developer",
                 Email = "joy.developer@ai-recruitment.local",
