@@ -308,74 +308,6 @@ namespace ai_recruitment.Migrations
                     b.ToTable("Candidates");
                 });
 
-            modelBuilder.Entity("ai_recruitment.Features.Departments.Model.Department", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("DepartmentName")
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Departments");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            DepartmentName = "Human Resources"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            DepartmentName = "Information Technology"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            DepartmentName = "Finance and Accounting"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            DepartmentName = "Sales"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            DepartmentName = "Marketing"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            DepartmentName = "Operations"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            DepartmentName = "Customer Support"
-                        },
-                        new
-                        {
-                            Id = 8,
-                            DepartmentName = "Engineering"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            DepartmentName = "Product Management"
-                        },
-                        new
-                        {
-                            Id = 10,
-                            DepartmentName = "Administration"
-                        });
-                });
-
             modelBuilder.Entity("ai_recruitment.Features.JobPosts.Model.Job", b =>
                 {
                     b.Property<int>("JobId")
@@ -554,9 +486,6 @@ namespace ai_recruitment.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("DepartmentId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -586,13 +515,6 @@ namespace ai_recruitment.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("PhoneNumber")
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("PhotoUrl")
-                        .HasColumnType("text");
-
                     b.Property<DateTime?>("ResetPasswordTokenExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -607,8 +529,6 @@ namespace ai_recruitment.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("DepartmentId");
-
                     b.HasIndex("Email")
                         .IsUnique();
 
@@ -621,7 +541,6 @@ namespace ai_recruitment.Migrations
                         {
                             Id = new Guid("11111111-1111-1111-1111-111111111111"),
                             CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
-                            DepartmentId = 2,
                             Email = "joy.developer@ai-recruitment.local",
                             FirstName = "Joy",
                             InsertedBy = "system-seed",
@@ -656,25 +575,13 @@ namespace ai_recruitment.Migrations
 
             modelBuilder.Entity("ai_recruitment.Features.Users.Model.User", b =>
                 {
-                    b.HasOne("ai_recruitment.Features.Departments.Model.Department", "Department")
-                        .WithMany("Users")
-                        .HasForeignKey("DepartmentId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("ai_recruitment.Features.Roles.Model.Role", "Role")
                         .WithMany("Users")
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Department");
-
                     b.Navigation("Role");
-                });
-
-            modelBuilder.Entity("ai_recruitment.Features.Departments.Model.Department", b =>
-                {
-                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("ai_recruitment.Features.JobPosts.Model.Job", b =>

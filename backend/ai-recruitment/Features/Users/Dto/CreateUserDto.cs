@@ -26,6 +26,5 @@ namespace ai_recruitment.Features.Users.Dto
         [Required]
         [Range(1, int.MaxValue, ErrorMessage = "RoleId must be a valid role identifier.")]
         public int RoleId { get; set; }
-        public int DepartmentId { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-using ai_recruitment.Features.Departments.Model;
 using ai_recruitment.Features.Roles.Model;
+using ai_recruitment.Features.Departments.Model;
 
 namespace ai_recruitment.Features.Users.Model
 {
@@ -38,17 +38,12 @@ namespace ai_recruitment.Features.Users.Model
 
         public DateTime? ResetPasswordTokenExpiresAt { get; set; }
 
-        [MaxLength(20)]
-        [Phone]
-        public string? PhoneNumber { get; set; }
-        public string? PhotoUrl { get; set; }
-
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 
+        public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
         public int? DepartmentId { get; set; }
         public Department? Department { get; set; }
 
-        // Navigation: one user -> many refresh tokens (one per active session/device)
     }
 }

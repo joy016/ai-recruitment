@@ -34,8 +34,6 @@ import {
 } from "@/lib/utils/pagination";
 import { getUsers, updateUserStatus } from "@/lib/api/user";
 import { UserItem } from "@/lib/types/user";
-import { Department } from "@/lib/types/department";
-import { getDepartment } from "@/lib/api/department";
 
 type AccountStatusFilter = (typeof ACCOUNT_STATUS_FILTERS)[number];
 
@@ -76,18 +74,16 @@ export default function AccountsPage() {
     roleId: 0,
     roleName: "All",
   });
-  const [department, setDepartment] = useState<Department[]>([]);
   const [rowCount, setRowCount] = useState(0);
 
   useEffect(() => {
-    const fetchOptions = async () => {
+    const getRoles = async () => {
       const roles = await getAllRoles();
-      const department = await getDepartment();
+      console.log("Raw /api/Roles/getAllRoles response:", roles);
       setRoles(roles ?? []);
-      setDepartment(department ?? []);
     };
 
-    fetchOptions();
+    getRoles();
   }, []);
 
   const fetchUsers = async () => {
@@ -135,7 +131,6 @@ export default function AccountsPage() {
       lastName: account.lastName,
       email: account.email,
       role: { roleName: account.roleName, roleId: account.roleId },
-      department: { departmentName: account.departmentName, id: account.depId },
     });
     setFormOpen(true);
   };
@@ -439,7 +434,6 @@ export default function AccountsPage() {
         onClose={handleCloseForm}
         onSubmit={handleSubmitForm}
         roles={roles}
-        department={department}
       />
 
       <ConfirmationModal
