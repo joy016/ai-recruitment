@@ -19,7 +19,6 @@ import {
   TableHead,
   TablePagination,
   TableRow,
-  TextField,
   Tooltip,
   Typography,
   useTheme,
@@ -40,17 +39,13 @@ type CandidateTableProps = {
   draftStatusByApplicantId: Record<string, number>;
   savedStatusByApplicantId: Record<string, number>;
   savedScheduleByApplicantId: Record<string, string>;
-  draftScheduleByApplicantId: Record<string, string>;
   applicantStatuses: ApplicantStatusItem[];
   formatScheduleForDisplay: (value: string) => string;
-  toDateTimeLocalValue: (value: string | undefined) => string;
-  hasPendingChanges: (applicantId: string) => boolean;
   savingApplicantId: string | null;
   onStatusChange: (
     applicantId: string,
     event: SelectChangeEvent<number | "">,
   ) => void;
-  onScheduleChange: (applicantId: string, value: string) => void;
   onEditStatus: (applicantId: string) => void;
   onSaveStatus: (applicantId: string) => void;
   onCancelStatus: (applicantId: string) => void;
@@ -69,14 +64,10 @@ export default function CandidateTable({
   draftStatusByApplicantId,
   savedStatusByApplicantId,
   savedScheduleByApplicantId,
-  draftScheduleByApplicantId,
   applicantStatuses,
   formatScheduleForDisplay,
-  toDateTimeLocalValue,
-  hasPendingChanges,
   savingApplicantId,
   onStatusChange,
-  onScheduleChange,
   onEditStatus,
   onSaveStatus,
   onCancelStatus,
@@ -107,23 +98,6 @@ export default function CandidateTable({
       />
     );
   };
-
-  const renderScheduleInput = (candidate: Candidate, fullWidth = false) => (
-    <TextField
-      type="datetime-local"
-      size="small"
-      fullWidth={fullWidth}
-      value={toDateTimeLocalValue(draftScheduleByApplicantId[candidate.id])}
-      onChange={(event) => onScheduleChange(candidate.id, event.target.value)}
-      disabled={savingApplicantId === candidate.id}
-      slotProps={{
-        htmlInput: {
-          "aria-label": `Interview schedule for ${candidate.firstName} ${candidate.lastName}`,
-        },
-      }}
-      sx={{ minWidth: fullWidth ? 0 : 210 }}
-    />
-  );
 
   const pagination = (
     <TablePagination
@@ -164,7 +138,9 @@ export default function CandidateTable({
             <Stack spacing={1.2}>
               {candidates.map((candidate) => {
                 const isEditing = editingApplicantId === candidate.id;
-                const hasPendingChange = hasPendingChanges(candidate.id);
+                const hasPendingStatusChange =
+                  draftStatusByApplicantId[candidate.id] !==
+                  savedStatusByApplicantId[candidate.id];
                 const isSaving = savingApplicantId === candidate.id;
 
                 return (
@@ -194,24 +170,12 @@ export default function CandidateTable({
                       <Typography variant="body2" sx={{ color: "#52718c" }}>
                         Experience: {candidate.yearsOfExperience} years
                       </Typography>
-                      {isEditing ? (
-                        <Box>
-                          <Typography
-                            variant="body2"
-                            sx={{ color: "#52718c", mb: 0.6 }}
-                          >
-                            Interview Sched:
-                          </Typography>
-                          {renderScheduleInput(candidate, true)}
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" sx={{ color: "#52718c" }}>
-                          Interview Sched:{" "}
-                          {formatScheduleForDisplay(
-                            savedScheduleByApplicantId[candidate.id],
-                          )}
-                        </Typography>
-                      )}
+                      <Typography variant="body2" sx={{ color: "#52718c" }}>
+                        Interview Sched:{" "}
+                        {formatScheduleForDisplay(
+                          savedScheduleByApplicantId[candidate.id],
+                        )}
+                      </Typography>
 
                       <Stack direction="row" spacing={1} sx={{ pt: 0.5 }}>
                         <Tooltip title="View resume">
@@ -257,7 +221,7 @@ export default function CandidateTable({
                         )}
 
                         {!isEditing ? (
-                          <Tooltip title="Edit status or schedule">
+                          <Tooltip title="Edit status">
                             <IconButton
                               aria-label={`Edit status for ${candidate.firstName} ${candidate.lastName}`}
                               onClick={() => onEditStatus(candidate.id)}
@@ -271,7 +235,7 @@ export default function CandidateTable({
                             <IconButton
                               aria-label={`Save status for ${candidate.firstName} ${candidate.lastName}`}
                               onClick={() => onSaveStatus(candidate.id)}
-                              disabled={!hasPendingChange || isSaving}
+                              disabled={!hasPendingStatusChange || isSaving}
                               sx={{
                                 color: "#2f90c5",
                                 "&.Mui-disabled": { color: "#9bb7c9" },
@@ -363,7 +327,9 @@ export default function CandidateTable({
             ) : (
               candidates.map((candidate) => {
                 const isEditing = editingApplicantId === candidate.id;
-                const hasPendingChange = hasPendingChanges(candidate.id);
+                const hasPendingStatusChange =
+                  draftStatusByApplicantId[candidate.id] !==
+                  savedStatusByApplicantId[candidate.id];
                 const isSaving = savingApplicantId === candidate.id;
 
                 return (
@@ -390,11 +356,9 @@ export default function CandidateTable({
                     <TableCell>{candidate.lastName}</TableCell>
                     <TableCell>{candidate.yearsOfExperience}</TableCell>
                     <TableCell>
-                      {isEditing
-                        ? renderScheduleInput(candidate)
-                        : formatScheduleForDisplay(
-                            savedScheduleByApplicantId[candidate.id],
-                          )}
+                      {formatScheduleForDisplay(
+                        savedScheduleByApplicantId[candidate.id],
+                      )}
                     </TableCell>
                     <TableCell>
                       {isEditing ? (
@@ -424,7 +388,7 @@ export default function CandidateTable({
                     <TableCell>
                       <Stack direction="row" spacing={0.6}>
                         {!isEditing ? (
-                          <Tooltip title="Edit status or schedule">
+                          <Tooltip title="Edit status">
                             <IconButton
                               aria-label={`Edit status for ${candidate.firstName} ${candidate.lastName}`}
                               onClick={() => onEditStatus(candidate.id)}
@@ -440,7 +404,7 @@ export default function CandidateTable({
                                 <IconButton
                                   aria-label={`Save status for ${candidate.firstName} ${candidate.lastName}`}
                                   onClick={() => onSaveStatus(candidate.id)}
-                                  disabled={!hasPendingChange || isSaving}
+                                  disabled={!hasPendingStatusChange || isSaving}
                                   sx={{
                                     color: "#2f90c5",
                                     "&.Mui-disabled": { color: "#9bb7c9" },

@@ -146,7 +146,6 @@ export default function HrDashboardPage() {
   const [activeCard, setActiveCard] = useState<string | null>(null);
   const [totalJobCount, setTotalJobCount] = useState(0);
   const [newApplicantCount, setNewApplicantCount] = useState(0);
-  const [interviewsTodayCount, setInterviewsTodayCount] = useState(0);
 
   const statCards = useMemo(
     () => [
@@ -162,11 +161,11 @@ export default function HrDashboardPage() {
       },
       {
         label: "Interviews Today",
-        value: String(interviewsTodayCount),
+        value: String(interviewSchedule.length),
         isLoading: false,
       },
     ],
-    [totalJobCount, newApplicantCount, interviewsTodayCount],
+    [totalJobCount, newApplicantCount],
   );
 
   const handleCardClick = (label: string) => {
@@ -279,11 +278,7 @@ export default function HrDashboardPage() {
         newApplicantCount={newApplicantCount}
       />
 
-      <InterviewsToday
-        isVisible={activeCard === "Interviews Today"}
-        setInterviewsTodayCount={setInterviewsTodayCount}
-        interviewsTodayCount={interviewsTodayCount}
-      />
+      {activeCard === "Interviews Today" ? <InterviewsToday /> : null}
 
       <CardContainer>
         <Box

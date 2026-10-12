@@ -1,4 +1,3 @@
-import LinkButton from "@/app/component/LinkButton";
 import { Box, Button, Paper, Typography } from "@mui/material";
 
 type CandidateResumePageProps = {
@@ -90,8 +89,8 @@ export default async function CandidateResumePage({
         >
           Download Resume
         </Button>
-        <LinkButton
-          href="/hr/candidates"
+        <Button
+          href="/hr/candidates/profile"
           variant="outlined"
           sx={{
             textTransform: "none",
@@ -101,7 +100,7 @@ export default async function CandidateResumePage({
           }}
         >
           Back to Candidates Profile
-        </LinkButton>
+        </Button>
       </Box>
     </Paper>
   );

@@ -261,9 +261,6 @@ namespace ai_recruitment.Migrations
                     b.Property<DateTime?>("InterviewSched")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Guid?>("InterviewerId")
-                        .HasColumnType("uuid");
-
                     b.Property<int>("JobId")
                         .HasColumnType("integer");
 
@@ -305,8 +302,6 @@ namespace ai_recruitment.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("InterviewerId");
 
                     b.HasIndex("JobId");
 
@@ -639,18 +634,11 @@ namespace ai_recruitment.Migrations
 
             modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Candidate", b =>
                 {
-                    b.HasOne("ai_recruitment.Features.Users.Model.User", "Interviewer")
-                        .WithMany("InterviewedCandidates")
-                        .HasForeignKey("InterviewerId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("ai_recruitment.Features.JobPosts.Model.Job", "Job")
                         .WithMany("Candidates")
                         .HasForeignKey("JobId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Interviewer");
 
                     b.Navigation("Job");
                 });
@@ -699,11 +687,6 @@ namespace ai_recruitment.Migrations
                     b.Navigation("Permissions");
 
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("ai_recruitment.Features.Users.Model.User", b =>
-                {
-                    b.Navigation("InterviewedCandidates");
                 });
 #pragma warning restore 612, 618
         }

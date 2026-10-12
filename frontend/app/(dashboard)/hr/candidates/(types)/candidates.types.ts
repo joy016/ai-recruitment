@@ -22,13 +22,13 @@ export interface Candidate {
   resumePath: string;
 }
 
-/** Reusable paginated list response; `T` is the item type. */
-export interface PaginatedResponse<T> {
-  data: T[];
+export interface GetCandidatesResponse {
+  status: number;
+  data: Candidate[];
   totalCount: number;
-  pageNumber: number;
-  pageSize: number;
   totalPages: number;
+  currentPage: number;
+  pageSize: number;
 }
 
 export interface NewCandidates {
@@ -40,26 +40,10 @@ export interface NewCandidates {
   applicationSource: string | null;
 }
 
-export interface CandidatesInterviewToday {
-  candidateId: string;
-  candidateName: string;
-  positionApplied: string;
-  applicationStatus: string;
-  interviewTime: string;
-  interviewer: string | null;
+export interface GetNewCandidatesResponse {
+  data: NewCandidates[];
+  totalCount: number;
+  pageNumber: number;
+  pageSize: number;
+  totalPages: number;
 }
-
-// GET /getCandidates names the page field `currentPage` and adds `status`.
-export type GetCandidatesResponse = Omit<
-  PaginatedResponse<Candidate>,
-  "pageNumber"
-> & {
-  status: number;
-  currentPage: number;
-};
-
-export type GetNewCandidatesResponse = PaginatedResponse<NewCandidates>;
-
-// GET /getCandidatesForInterviewToday returns the full list, not paged.
-export type GetCandidatesInterviewTodayResponse =
-  PaginatedResponse<CandidatesInterviewToday>;

@@ -11,7 +11,6 @@ namespace ai_recruitment.Features.JobPosts.Controller
 
     [ApiController]
     [Route("api/[controller]")]
-    
     public class JobController : ControllerBase
 
     {

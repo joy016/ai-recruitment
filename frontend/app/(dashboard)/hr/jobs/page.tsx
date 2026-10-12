@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, useEffect } from "react";
 import {
   Alert,
@@ -550,8 +549,7 @@ export default function JobsPage() {
                     sx={{ flexWrap: "wrap" }}
                   >
                     <Button
-                      component={Link}
-                      href={`/hr/candidates?jobId=${jobPost.jobId}`}
+                      href={`/hr/candidates/profile?jobId=${jobPost.jobId}`}
                       variant="outlined"
                       size="small"
                       sx={{ textTransform: "none", borderRadius: 2 }}

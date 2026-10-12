@@ -3,12 +3,8 @@
     public class UpdateCandidateStatusDto
     {
         public Guid Id { get; set; }
-        public int? ApplicantStatusId { get; set; }
-        public DateTime? InterviewSched { get; set; }
-        public DateTime? UpdatedAt { get; set; }
-
-        public Guid? InterviewerId { get; set; }
-
-
+        public int ApplicantStatusId { get; set; }
+        public DateTime InterviewSched { get; set; }
+        public DateTime UpdatedAt { get; set; }
     }
 }

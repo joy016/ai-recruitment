@@ -5,10 +5,7 @@ import { Chip } from "@mui/material";
 import { JobItem } from "@/lib/types/job";
 import { formatDateTime, formatRelativeTime } from "@/lib/utils/date";
 import { CommonTableColumn } from "@/app/component/CommonTable";
-import {
-  CandidatesInterviewToday,
-  NewCandidates,
-} from "../../candidates/(types)/candidates.types";
+import { NewCandidates } from "../../candidates/(types)/candidates.types";
 
 export const useJobColumns = (): CommonTableColumn<JobItem>[] =>
   useMemo(
@@ -81,37 +78,3 @@ export const useApplicantsColumns = (): CommonTableColumn<NewCandidates>[] =>
     ],
     [],
   );
-
-export const useForInterviewColumns =
-  (): CommonTableColumn<CandidatesInterviewToday>[] =>
-    useMemo(
-      () => [
-        {
-          key: "candidateName",
-          label: "Applicant",
-          render: (can) => can.candidateName,
-          secondary: (can) => `APP-${can.candidateId.slice(0, 8)}`,
-        },
-        {
-          key: "positionApplied",
-          label: "Positiion",
-          render: (can) => can.positionApplied,
-        },
-        {
-          key: "applicationStatus",
-          label: "Stage",
-          render: (can) => can.applicationStatus,
-        },
-        {
-          key: "interviewTime",
-          label: "Interview Schedule",
-          render: (can) => formatDateTime(can.interviewTime),
-        },
-        {
-          key: "interviewer",
-          label: "Interviewer",
-          render: (can) => can.interviewer,
-        },
-      ],
-      [],
-    );
