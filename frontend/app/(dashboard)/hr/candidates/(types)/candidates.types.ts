@@ -47,3 +47,12 @@ export interface GetNewCandidatesResponse {
   pageSize: number;
   totalPages: number;
 }
+
+export interface CandidatesInterviewToday {
+  candidateId: string;
+  candidateName: string;
+  positionApplied: string;
+  applicationStatus: string;
+  interviewTime: string;
+  interviewer: string | null;
+}
