@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using ai_recruitment.Features.Departments.Model;
 using ai_recruitment.Features.Roles.Model;
 
 namespace ai_recruitment.Features.Users.Model
