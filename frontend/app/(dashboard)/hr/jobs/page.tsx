@@ -45,6 +45,8 @@ import {
   createMuiPageChangeHandler,
   createMuiPageSizeChangeHandler,
 } from "@/lib/utils/pagination";
+import { getDepartment } from "@/lib/api/department";
+import { Department } from "@/lib/types/department";
 
 const mapJobDetailsToFormValues = (
   details: JobDetailsResponse,
@@ -139,11 +141,11 @@ export default function JobsPage() {
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(JOBS_PAGE_SIZE);
   const [totalJobCount, setTotalJobCount] = useState(0);
-
   const [pendingStatusUpdate, setPendingStatusUpdate] = useState<{
     job: JobItem;
     newStatus: JobStatus;
   } | null>(null);
+  const [department, setDepartment] = useState<Department[]>([]);
 
   const fetchJobPosts = async () => {
     try {
@@ -160,6 +162,14 @@ export default function JobsPage() {
   useEffect(() => {
     fetchJobPosts();
   }, [statusFilter, pageNumber, pageSize]);
+
+  useEffect(() => {
+    const fetchDepartment = async () => {
+      const departmentOps = await getDepartment();
+      setDepartment(departmentOps ?? []);
+    };
+    fetchDepartment();
+  }, []);
 
   const applicationLink = useMemo(() => {
     if (!applicationFormJob) {
@@ -771,6 +781,7 @@ export default function JobsPage() {
         initialValues={editingJobValues}
         onClose={handleCloseCreateJob}
         onSubmit={handleSubmitJobForm}
+        department={department}
       />
 
       <Menu

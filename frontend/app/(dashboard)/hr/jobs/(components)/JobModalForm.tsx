@@ -23,6 +23,7 @@ import { Close } from "@mui/icons-material";
 import { editJob, insertJob } from "@/lib/api/job";
 import { EditJobPayload, InsertJobPayload } from "@/lib/types/job";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
+import { Department } from "@/lib/types/department";
 
 export type JobStatus = "Open" | "Closed" | "Draft";
 
@@ -64,6 +65,7 @@ type JobModalFormProps = {
   initialValues: JobFormValues | null;
   onClose: () => void;
   onSubmit: (values: JobFormValues) => void;
+  department: Department[];
 };
 
 export default function JobModalForm({
@@ -73,6 +75,7 @@ export default function JobModalForm({
   initialValues,
   onClose,
   onSubmit,
+  department,
 }: Readonly<JobModalFormProps>) {
   const [jobForm, setJobForm] = useState<JobFormValues>(
     () => initialValues ?? emptyJobForm,
@@ -207,8 +210,6 @@ export default function JobModalForm({
     setPendingValues(null);
   };
 
-  jobForm;
-
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle
@@ -314,9 +315,11 @@ export default function JobModalForm({
               }
               fullWidth
             >
-              <MenuItem value="IT">IT</MenuItem>
-              <MenuItem value="HR">HR</MenuItem>
-              <MenuItem value="Finance">Finance</MenuItem>
+              {department.map((dep) => (
+                <MenuItem key={dep.id} value={dep.departmentName}>
+                  {dep.departmentName}
+                </MenuItem>
+              ))}
             </Select>
           </Box>
 
