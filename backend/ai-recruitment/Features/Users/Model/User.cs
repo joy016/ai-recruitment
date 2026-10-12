@@ -45,9 +45,5 @@ namespace ai_recruitment.Features.Users.Model
         public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
         public int? DepartmentId { get; set; }
         public Department? Department { get; set; }
-
-        public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
-
-
     }
 }

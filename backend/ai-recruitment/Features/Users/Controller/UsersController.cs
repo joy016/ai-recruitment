@@ -52,6 +52,7 @@ namespace ai_recruitment.Features.Users.Controller
                 Email = normalizedEmail,
                 InsertedBy = dto.InsertedBy,
                 RoleId = dto.RoleId,
+                DepartmentId = dto.DepartmentId,
             };
 
             user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
@@ -98,10 +99,12 @@ namespace ai_recruitment.Features.Users.Controller
                     IsActive = u.IsActive,
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt,
-                    RoleId = u.RoleId, 
+                    RoleId = u.RoleId,
                     RoleName = u.Role.RoleName,
-                    InsertedBy =u.InsertedBy
-                })               
+                    InsertedBy =u.InsertedBy,
+                    DepId = u.DepartmentId,
+                    DepartmentName = u.Department != null ? u.Department.DepartmentName : null
+                })
                 .ToListAsync();
 
             return Ok(new
@@ -129,8 +132,10 @@ namespace ai_recruitment.Features.Users.Controller
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId,
-                    RoleName = u.Role.RoleName, 
-                    InsertedBy = u.InsertedBy
+                    RoleName = u.Role.RoleName,
+                    InsertedBy = u.InsertedBy,
+                    DepId = u.DepartmentId,
+                    DepartmentName = u.Department != null ? u.Department.DepartmentName : null
                 })
                 .FirstOrDefaultAsync();
 
@@ -184,6 +189,7 @@ namespace ai_recruitment.Features.Users.Controller
             user.LastName = dto.LastName;
             user.Email = normalizedEmail;
             user.RoleId = dto.RoleId;
+            user.DepartmentId = dto.DepId;
             user.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

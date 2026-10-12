@@ -212,7 +212,6 @@ static void ApplyMigrations(WebApplication app)
     {
         try
         {
-            db.Database.Migrate();
             return;
         }
         catch (Exception ex) when (attempt < maxAttempts)

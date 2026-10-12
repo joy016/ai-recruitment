@@ -41,42 +41,6 @@ export default function ProfileSettings({
   const [isEditing, setIsEditing] = useState(false);
   const [draftProfile, setDraftProfile] = useState<UserProfile>(profile);
   const [showSavedMessage, setShowSavedMessage] = useState(false);
-  const dispatch = useAppDispatch();
-  // The photo is only uploaded when "Save Changes" is clicked.
-  const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
-  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
-  const [photoError, setPhotoError] = useState<string | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [savedMessage, setSavedMessage] = useState("");
-
-  useEffect(() => {
-    return () => {
-      if (photoPreviewUrl) {
-        URL.revokeObjectURL(photoPreviewUrl);
-      }
-    };
-  }, [photoPreviewUrl]);
-
-  const clearPendingPhoto = () => {
-    setPendingPhoto(null);
-    setPhotoPreviewUrl(null);
-    setPhotoError(null);
-  };
-
-  const handlePhotoSelect = (file: File) => {
-    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
-      setPhotoError("Only JPEG, PNG, or WebP images are allowed.");
-      return;
-    }
-    if (file.size > MAX_PHOTO_BYTES) {
-      setPhotoError("Max file size is 2 MB.");
-      return;
-    }
-
-    setPhotoError(null);
-    setPendingPhoto(file);
-    setPhotoPreviewUrl(URL.createObjectURL(file));
-  };
 
   const handleFieldChange = (
     field: keyof Pick<

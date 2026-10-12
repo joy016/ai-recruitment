@@ -25,6 +25,8 @@ export interface UserItem {
   roleId: number;
   roleName: string;
   insertedBy: string;
+  depId: number;
+  departmentName: string;
 }
 
 export interface GetUsersResponse {

@@ -34,6 +34,8 @@ import {
 } from "@/lib/utils/pagination";
 import { getUsers, updateUserStatus } from "@/lib/api/user";
 import { UserItem } from "@/lib/types/user";
+import { getDepartment } from "@/lib/api/department";
+import { Department } from "@/lib/types/department";
 
 type AccountStatusFilter = (typeof ACCOUNT_STATUS_FILTERS)[number];
 
@@ -74,16 +76,27 @@ export default function AccountsPage() {
     roleId: 0,
     roleName: "All",
   });
+  const [department, setDepartment] = useState<Department[]>([]);
   const [rowCount, setRowCount] = useState(0);
 
   useEffect(() => {
-    const getRoles = async () => {
-      const roles = await getAllRoles();
-      console.log("Raw /api/Roles/getAllRoles response:", roles);
-      setRoles(roles ?? []);
+    const fetchOptions = async () => {
+      try {
+        const [rolesData, departmentData] = await Promise.all([
+          getAllRoles(),
+          getDepartment(),
+        ]);
+
+        console.log("Raw /api/Roles/getAllRoles response:", rolesData);
+
+        setRoles(rolesData ?? []);
+        setDepartment(departmentData ?? []);
+      } catch (error) {
+        console.error("Failed to load roles/departments:", error);
+      }
     };
 
-    getRoles();
+    fetchOptions();
   }, []);
 
   const fetchUsers = async () => {
@@ -131,6 +144,7 @@ export default function AccountsPage() {
       lastName: account.lastName,
       email: account.email,
       role: { roleName: account.roleName, roleId: account.roleId },
+      department: { departmentName: account.departmentName, id: account.depId },
     });
     setFormOpen(true);
   };
@@ -434,6 +448,7 @@ export default function AccountsPage() {
         onClose={handleCloseForm}
         onSubmit={handleSubmitForm}
         roles={roles}
+        department={department}
       />
 
       <ConfirmationModal

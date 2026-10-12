@@ -58,6 +58,19 @@ namespace ai_recruitment.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Departments",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    DepartmentName = table.Column<string>(type: "text", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Departments", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Jobs",
                 columns: table => new
                 {
@@ -87,45 +100,13 @@ namespace ai_recruitment.Migrations
                     RoleName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
                     Description = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: true),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    ChipColor = table.Column<string>(type: "text", nullable: false),
+                    BackgroundColor = table.Column<string>(type: "text", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Roles", x => x.RoleId);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Candidates",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmailAddress = table.Column<string>(type: "text", nullable: false),
-                    FirstName = table.Column<string>(type: "text", nullable: false),
-                    LastName = table.Column<string>(type: "text", nullable: false),
-                    PhoneNumber = table.Column<string>(type: "text", nullable: false),
-                    YearsOfExperience = table.Column<int>(type: "integer", nullable: false),
-                    LinkedInProfile = table.Column<string>(type: "text", nullable: true),
-                    CoverLetter = table.Column<string>(type: "text", nullable: true),
-                    ResumeFileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
-                    ResumeFilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
-                    Role = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
-                    ApplicantStatusId = table.Column<int>(type: "integer", maxLength: 100, nullable: false),
-                    InterviewSched = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    PortfolioLink = table.Column<string>(type: "text", nullable: true),
-                    SourcOfApplication = table.Column<string>(type: "text", nullable: true),
-                    JobId = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Candidates", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Candidates_Jobs_JobId",
-                        column: x => x.JobId,
-                        principalTable: "Jobs",
-                        principalColumn: "JobId",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -166,17 +147,65 @@ namespace ai_recruitment.Migrations
                     LastLoginAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     ResetPasswordTokenHash = table.Column<string>(type: "text", nullable: true),
                     ResetPasswordTokenExpiresAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    RoleId = table.Column<int>(type: "integer", nullable: false)
+                    RoleId = table.Column<int>(type: "integer", nullable: false),
+                    DepartmentId = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Users", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Users_Departments_DepartmentId",
+                        column: x => x.DepartmentId,
+                        principalTable: "Departments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                     table.ForeignKey(
                         name: "FK_Users_Roles_RoleId",
                         column: x => x.RoleId,
                         principalTable: "Roles",
                         principalColumn: "RoleId",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Candidates",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uuid", nullable: false),
+                    EmailAddress = table.Column<string>(type: "text", nullable: false),
+                    FirstName = table.Column<string>(type: "text", nullable: false),
+                    LastName = table.Column<string>(type: "text", nullable: false),
+                    PhoneNumber = table.Column<string>(type: "text", nullable: false),
+                    YearsOfExperience = table.Column<int>(type: "integer", nullable: false),
+                    LinkedInProfile = table.Column<string>(type: "text", nullable: true),
+                    CoverLetter = table.Column<string>(type: "text", nullable: true),
+                    ResumeFileName = table.Column<string>(type: "character varying(255)", maxLength: 255, nullable: false),
+                    ResumeFilePath = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true),
+                    Role = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    ApplicantStatusId = table.Column<int>(type: "integer", maxLength: 100, nullable: false),
+                    InterviewSched = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    PortfolioLink = table.Column<string>(type: "text", nullable: true),
+                    SourcOfApplication = table.Column<string>(type: "text", nullable: true),
+                    JobId = table.Column<int>(type: "integer", nullable: false),
+                    InterviewerId = table.Column<Guid>(type: "uuid", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Candidates", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_Candidates_Jobs_JobId",
+                        column: x => x.JobId,
+                        principalTable: "Jobs",
+                        principalColumn: "JobId",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_Candidates_Users_InterviewerId",
+                        column: x => x.InterviewerId,
+                        principalTable: "Users",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.InsertData(
@@ -197,11 +226,50 @@ namespace ai_recruitment.Migrations
                     { 11, "#EF4444", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), "Candidate was rejected during the recruitment process", true, 10, "Rejected" }
                 });
 
+            migrationBuilder.InsertData(
+                table: "Departments",
+                columns: new[] { "Id", "DepartmentName" },
+                values: new object[,]
+                {
+                    { 1, "Human Resources" },
+                    { 2, "Information Technology" },
+                    { 3, "Finance and Accounting" },
+                    { 4, "Sales" },
+                    { 5, "Marketing" },
+                    { 6, "Operations" },
+                    { 7, "Customer Support" },
+                    { 8, "Engineering" },
+                    { 9, "Product Management" },
+                    { 10, "Administration" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Roles",
+                columns: new[] { "RoleId", "BackgroundColor", "ChipColor", "CreatedAt", "Description", "IsActive", "RoleName" },
+                values: new object[,]
+                {
+                    { 1, "#F3E8FB", "#7B2FB0", new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc), "Full system access", true, "Super Admin" },
+                    { 2, "#EFF6FF", "#2563EB", new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc), "Manage recruitment operations", true, "HR Admin" },
+                    { 3, "#ECFDF5", "#0F766E", new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc), "Manage recruitment", true, "Recruiter" },
+                    { 4, "#FFF7ED", "#D97706", new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc), "Manage assigned jobs and candidates", true, "Hiring Manager" },
+                    { 5, "#FDF2F8", "#DB2777", new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc), "Manage interviews", true, "Interviewer" }
+                });
+
+            migrationBuilder.InsertData(
+                table: "Users",
+                columns: new[] { "Id", "CreatedAt", "DepartmentId", "Email", "FirstName", "InsertedBy", "IsActive", "LastLoginAt", "LastName", "PasswordHash", "ResetPasswordTokenExpiresAt", "ResetPasswordTokenHash", "RoleId", "UpdatedAt" },
+                values: new object[] { new Guid("11111111-1111-1111-1111-111111111111"), new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc), 2, "joy.developer@ai-recruitment.local", "Joy", "system-seed", true, null, "Developer", "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==", null, null, 1, null });
+
             migrationBuilder.CreateIndex(
                 name: "IX_Applicant_EmailAddress",
                 table: "Applicant",
                 column: "EmailAddress",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Candidates_InterviewerId",
+                table: "Candidates",
+                column: "InterviewerId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Candidates_JobId",
@@ -218,6 +286,11 @@ namespace ai_recruitment.Migrations
                 table: "Roles",
                 column: "RoleName",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Users_DepartmentId",
+                table: "Users",
+                column: "DepartmentId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_Email",
@@ -247,10 +320,13 @@ namespace ai_recruitment.Migrations
                 name: "Permissions");
 
             migrationBuilder.DropTable(
+                name: "Jobs");
+
+            migrationBuilder.DropTable(
                 name: "Users");
 
             migrationBuilder.DropTable(
-                name: "Jobs");
+                name: "Departments");
 
             migrationBuilder.DropTable(
                 name: "Roles");
