@@ -43,6 +43,12 @@ namespace ai_recruitment.Data
               .WithMany(j => j.Candidates)
              .HasForeignKey(j => j.JobId);
 
+            modelBuilder.Entity<Candidate>()
+              .HasOne(c => c.Interviewer)
+              .WithMany(u => u.InterviewedCandidates)
+              .HasForeignKey(c => c.InterviewerId)
+              .OnDelete(DeleteBehavior.SetNull);
+
             // one Role -> many Users
             modelBuilder.Entity<User>()
                 .HasOne(u => u.Role)

@@ -3,6 +3,7 @@ import { api } from "@/lib/api-client";
 import BackendServer from "@/constant/server-address";
 import {
   Candidate,
+  GetCandidatesInterviewTodayResponse,
   GetCandidatesResponse,
   GetNewCandidatesResponse,
 } from "@/app/(dashboard)/hr/candidates/(types)/candidates.types";
@@ -68,5 +69,14 @@ export const updateCandidateStatus = async (
   return api.put<ApiResponse, UpdateStatusPayload>(
     `${CANDIDATES_ENDPOINT}/updateCandidateStatus`,
     payload,
+  );
+};
+
+export const getCandidatesForInterviewToday = async (
+  pageNumber: number,
+  pageSize: number,
+): Promise<GetCandidatesInterviewTodayResponse> => {
+  return api.get<GetCandidatesInterviewTodayResponse>(
+    `${CANDIDATES_ENDPOINT}/getCandidatesForInterviewToday?pageNumber=${pageNumber}&pageSize=${pageSize}`,
   );
 };

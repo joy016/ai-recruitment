@@ -1,6 +1,7 @@
-using System.ComponentModel.DataAnnotations;
-using ai_recruitment.Features.Roles.Model;
+using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.Departments.Model;
+using ai_recruitment.Features.Roles.Model;
+using System.ComponentModel.DataAnnotations;
 
 namespace ai_recruitment.Features.Users.Model
 {
@@ -44,6 +45,9 @@ namespace ai_recruitment.Features.Users.Model
         public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
         public int? DepartmentId { get; set; }
         public Department? Department { get; set; }
+
+        public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
+
 
     }
 }

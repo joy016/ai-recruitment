@@ -1,75 +1,62 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import CardContainer from "@/app/component/CardContainer";
-import {
-  Box,
-  Typography,
-  TableContainer,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Chip,
-} from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { CandidatesInterviewToday } from "../../candidates/(types)/candidates.types";
+import { getCandidatesForInterviewToday } from "@/lib/api/candidate";
+import CommonTable from "@/app/component/CommonTable";
+import { useForInterviewColumns } from "../(hooks)/useDashboardColumns";
 
-const interviewSchedule = [
-  {
-    id: "APP-1001",
-    candidateName: "Sarah Jones",
-    role: "Frontend Developer",
-    stage: "Initial Interview",
-    time: "9:30 AM",
-    interviewer: "Maria Santos",
-    mode: "Google Meet",
-  },
-  {
-    id: "APP-1002",
-    candidateName: "Mark Daniel",
-    role: "Backend Developer",
-    stage: "Technical Interview",
-    time: "11:00 AM",
-    interviewer: "Kevin Lim",
-    mode: "Zoom",
-  },
-  {
-    id: "APP-1008",
-    candidateName: "Alyssa Cruz",
-    role: "UI/UX Designer",
-    stage: "Final Interview",
-    time: "1:30 PM",
-    interviewer: "Jenna Reyes",
-    mode: "On-site",
-  },
-  {
-    id: "APP-1010",
-    candidateName: "Daniel Perez",
-    role: "QA Engineer",
-    stage: "Initial Interview",
-    time: "3:00 PM",
-    interviewer: "Chris Ong",
-    mode: "Google Meet",
-  },
-  {
-    id: "APP-1012",
-    candidateName: "Nicole Tan",
-    role: "Product Analyst",
-    stage: "HR Interview",
-    time: "4:15 PM",
-    interviewer: "Pam Velasco",
-    mode: "Microsoft Teams",
-  },
-  {
-    id: "APP-1015",
-    candidateName: "Jason Lee",
-    role: "Recruitment Associate",
-    stage: "Final Interview",
-    time: "5:00 PM",
-    interviewer: "Angela Cruz",
-    mode: "On-site",
-  },
-];
+interface InterviewsTodayProps {
+  isVisible: boolean;
+  setInterviewsTodayCount: React.Dispatch<React.SetStateAction<number>>;
+  interviewsTodayCount: number;
+}
 
-const InterviewsToday = () => {
+const InterviewsToday = ({
+  isVisible,
+  setInterviewsTodayCount,
+  interviewsTodayCount,
+}: InterviewsTodayProps) => {
+  const columns = useForInterviewColumns();
+  const [data, setData] = useState<CandidatesInterviewToday[]>([]);
+  const [paginationModel, setPaginationModel] = useState({
+    pageSize: 10,
+    pageNumber: 1,
+  });
+
+  useEffect(() => {
+    const fetchCandidates = async () => {
+      const candidate = await getCandidatesForInterviewToday(
+        paginationModel.pageNumber,
+        paginationModel.pageSize,
+      );
+
+      console.log(candidate);
+      setInterviewsTodayCount(candidate.totalCount);
+      setData(candidate.data);
+    };
+
+    fetchCandidates();
+  }, []);
+
+  if (!isVisible) {
+    return null;
+  }
+
+  const handleJobPageSizeChange = (newPageSize: number) => {
+    setPaginationModel({
+      pageSize: newPageSize,
+      pageNumber: 1,
+    });
+  };
+
+  const handleJobPageChange = (newPage: number) => {
+    setPaginationModel((prev) => ({
+      ...prev,
+      pageNumber: newPage,
+    }));
+  };
+
   return (
     <CardContainer>
       <Box
@@ -89,61 +76,16 @@ const InterviewsToday = () => {
         </Typography>
       </Box>
 
-      <TableContainer sx={{ overflowX: "auto" }}>
-        <Table sx={{ minWidth: 760 }}>
-          <TableHead>
-            <TableRow sx={{ bgcolor: "#f7fbfe" }}>
-              <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                Candidate
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                Position
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                Stage
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                Time
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                Interviewer
-              </TableCell>
-              <TableCell sx={{ fontWeight: 700, color: "#264a66" }}>
-                Mode
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {interviewSchedule.map((interview) => (
-              <TableRow key={interview.id} hover>
-                <TableCell>
-                  <Typography sx={{ fontWeight: 700, color: "#244964" }}>
-                    {interview.candidateName}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: "#6b879c" }}>
-                    {interview.id}
-                  </Typography>
-                </TableCell>
-                <TableCell>{interview.role}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={interview.stage}
-                    size="small"
-                    sx={{
-                      bgcolor: "#eef7ff",
-                      color: "#1f80b6",
-                      fontWeight: 700,
-                    }}
-                  />
-                </TableCell>
-                <TableCell>{interview.time}</TableCell>
-                <TableCell>{interview.interviewer}</TableCell>
-                <TableCell>{interview.mode}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <CommonTable
+        columns={columns}
+        data={data}
+        getRowKey={(a) => a.candidateId}
+        pageSize={paginationModel.pageSize}
+        pageNumber={paginationModel.pageNumber}
+        totalCount={interviewsTodayCount}
+        onPageChange={handleJobPageChange}
+        onPageSizeChange={handleJobPageSizeChange}
+      />
     </CardContainer>
   );
 };

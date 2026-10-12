@@ -46,3 +46,8 @@ export interface EditUserPayload {
 export interface UploadPhotoResponse {
   photoUrl: string;
 }
+
+export interface Interviewer {
+  interviewerId: string;
+  interviewerName: string;
+}

@@ -1,4 +1,5 @@
 ﻿using ai_recruitment.Features.JobPosts.Model;
+using ai_recruitment.Features.Users.Model;
 using System.ComponentModel.DataAnnotations;
 
 namespace ai_recruitment.Features.Candidates.model
@@ -36,6 +37,13 @@ namespace ai_recruitment.Features.Candidates.model
 
         public int JobId { get; set; }
         public Job Job { get; set; } = null!;
+
+        public Guid? InterviewerId { get; set; }
+        public User? Interviewer { get; set; }
+
+
+
+
 
     }
 }
