@@ -150,20 +150,22 @@ namespace ai_recruitment.Data
             // dummy dev account for testing the login route locally.
             // Credentials: joy.developer@ai-recruitment.local / Dev@12345
             modelBuilder.Entity<User>().HasData(
-                new User
-                {
-                    Id = new Guid("11111111-1111-1111-1111-111111111111"),
-                    FirstName = "Joy",
-                    LastName = "Developer",
-                    Email = "joy.developer@ai-recruitment.local",
-                    PasswordHash = "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==",
-                    InsertedBy = "system-seed",
-                    IsActive = true,
-                    CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
-                    RoleId = 1,
-                    DepartmentId = 2
-                }
-            );
+            new User
+            {
+                Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                EmployeeNumber = "EMP-JD-583921",
+                FirstName = "Joy",
+                LastName = "Developer",
+                Email = "joy.developer@ai-recruitment.local",
+                PhoneNumber = "09171234567",
+                PasswordHash = "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==",
+                InsertedBy = "system-seed",
+                IsActive = true,
+                CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
+                RoleId = 1,
+                DepartmentId = 2
+            }
+        );
 
             modelBuilder.Entity<Department>().HasData(
                 new Department { Id = 1, DepartmentName = "Human Resources" },

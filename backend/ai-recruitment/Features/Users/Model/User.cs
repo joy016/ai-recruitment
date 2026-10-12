@@ -39,6 +39,12 @@ namespace ai_recruitment.Features.Users.Model
 
         public DateTime? ResetPasswordTokenExpiresAt { get; set; }
 
+        [Required]
+        [StringLength(15)]
+        [Phone]
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
+
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 

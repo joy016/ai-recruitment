@@ -14,5 +14,9 @@ namespace ai_recruitment.Features.Users.Dto
         public string InsertedBy { get; set; } = string.Empty;
         public int? DepId { get; set; }
         public string? DepartmentName { get; set; }
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
+
+
     }
 }

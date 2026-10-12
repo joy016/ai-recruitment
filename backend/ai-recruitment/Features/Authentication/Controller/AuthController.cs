@@ -70,7 +70,9 @@ namespace ai_recruitment.Features.Authentication.Controller
                     RoleName = user.Role.RoleName,
                     InsertedBy = user.InsertedBy,
                     DepId = user.Department?.Id,
-                    DepartmentName = user.Department?.DepartmentName
+                    DepartmentName = user.Department?.DepartmentName,
+                    PhoneNumber = user.PhoneNumber,
+                    EmployeeNumber = user.EmployeeNumber,
                 }
             });
         }

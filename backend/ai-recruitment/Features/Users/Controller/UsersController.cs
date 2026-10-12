@@ -20,6 +20,7 @@ namespace ai_recruitment.Features.Users.Controller
             _context = context;
         }
 
+
         [HttpPost("insertUser")]
         public async Task<IActionResult> InsertUser([FromBody] CreateUserDto dto)
         {
@@ -36,7 +37,9 @@ namespace ai_recruitment.Features.Users.Controller
                 });
             }
 
-            var roleExists = await _context.Roles.AnyAsync(r => r.RoleId == dto.RoleId);
+            var roleExists = await _context.Roles
+                .AnyAsync(r => r.RoleId == dto.RoleId);
+
             if (!roleExists)
             {
                 return BadRequest(new
@@ -45,8 +48,37 @@ namespace ai_recruitment.Features.Users.Controller
                 });
             }
 
+            // Generate Employee ID: EMP-EL-123456
+            if (string.IsNullOrWhiteSpace(dto.FirstName) ||
+                string.IsNullOrWhiteSpace(dto.LastName))
+            {
+                return BadRequest(new
+                {
+                    message = "First name and last name are required."
+                });
+            }
+
+            string initials =
+                $"{char.ToUpperInvariant(dto.FirstName.Trim()[0])}" +
+                $"{char.ToUpperInvariant(dto.LastName.Trim()[0])}";
+
+            string employeeId;
+            bool employeeIdExists;
+
+            do
+            {
+                int randomNumber = Random.Shared.Next(100000, 1000000);
+
+                employeeId = $"EMP-{initials}-{randomNumber}";
+
+                employeeIdExists = await _context.Users
+                    .AnyAsync(u => u.EmployeeNumber == employeeId);
+
+            } while (employeeIdExists);
+
             var user = new Model.User
             {
+                EmployeeNumber = employeeId,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = normalizedEmail,
@@ -55,19 +87,20 @@ namespace ai_recruitment.Features.Users.Controller
                 DepartmentId = dto.DepartmentId,
             };
 
-            user.PasswordHash = _passwordHasher.HashPassword(user, dto.Password);
+            user.PasswordHash = _passwordHasher
+                .HashPassword(user, dto.Password);
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
-            return Ok(
-             new
-             {
-                 StatusMessage = "User Successfully Inserted",
-                 StatusCode = 200,
-             }
-            );
+            return Ok(new
+            {
+                StatusMessage = "User Successfully Inserted",
+                StatusCode = 200,
+                EmployeeId = employeeId
+            });
         }
+
 
         [HttpGet("getAllUsers")]
         public async Task<IActionResult> GetAllUsers([FromQuery] int? roleId, [FromQuery] bool? status, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
