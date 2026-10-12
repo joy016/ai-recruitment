@@ -44,7 +44,6 @@ namespace ai_recruitment.Features.Users.Model
         public string? PhoneNumber { get; set; }
         public string? PhotoUrl { get; set; }
 
-        // Navigation: one role -> many users
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 
