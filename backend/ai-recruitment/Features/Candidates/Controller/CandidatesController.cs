@@ -1,4 +1,5 @@
 ﻿using ai_recruitment.Data;
+using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates;
 using ai_recruitment.Features.Candidates.Dto;
 using Microsoft.AspNetCore.Mvc;
@@ -37,6 +38,7 @@ namespace ai_recruitment.Features.Candidates.controller
 
         [HttpPost]
         [Consumes("multipart/form-data")]
+        [HasPermission(PermissionNames.Candidates.Create)]
         public async Task<IActionResult> CreateCandidate(
             [FromForm] CreateCandidateDto dto)
         {
@@ -245,6 +247,7 @@ namespace ai_recruitment.Features.Candidates.controller
         }
 
         [HttpGet("{id}")]
+        [HasPermission(PermissionNames.Candidates.View)]
         public async Task<IActionResult> GetCandidate(Guid id)
         {
             var candidate = await _context.Candidates
@@ -262,6 +265,7 @@ namespace ai_recruitment.Features.Candidates.controller
         }
 
         [HttpGet("getCandidates")]
+        [HasPermission(PermissionNames.Candidates.View)]
         public async Task<IActionResult> GetAllCandidates([FromQuery] int? jobId, [FromQuery] int? pageNumber = 1, [FromQuery] int? pageSize = 10)
         {
             var query = _context.Candidates.AsNoTracking()
@@ -312,6 +316,7 @@ namespace ai_recruitment.Features.Candidates.controller
         }
 
         [HttpGet("getNewCandidates")]
+        [HasPermission(PermissionNames.Candidates.View)]
         public async Task<IActionResult> GetNewCandidates([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
 
@@ -362,6 +367,7 @@ namespace ai_recruitment.Features.Candidates.controller
         }
 
         [HttpPut("updateCandidateStatus")]
+        [HasPermission(PermissionNames.Candidates.Edit)]
         public async Task<IActionResult> UpdateCandidateStatus([FromBody] UpdateCandidateStatusDto dto)
         {
             var candidate = await _context.Candidates.FindAsync(dto.Id);
@@ -400,6 +406,7 @@ namespace ai_recruitment.Features.Candidates.controller
         }
 
         [HttpGet("getCandidatesForInterviewToday")]
+        [HasPermission(PermissionNames.Interviews.View)]
         public async Task<IActionResult> GetCandidatesForInterviewToday([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
             var today = DateTime.UtcNow.Date;
@@ -443,6 +450,25 @@ namespace ai_recruitment.Features.Candidates.controller
                 pageSize,
                 totalPages
             });
+        }
+
+        [HttpDelete("{id:guid}")]
+        [HasPermission(PermissionNames.Candidates.Delete)]
+        public async Task<IActionResult> DeleteCandidate(Guid id)
+        {
+            var candidate = await _context.Candidates.FindAsync(id);
+            if (candidate == null)
+            {
+                return NotFound(new
+                {
+                    message = "Candidate not found."
+                });
+            }
+
+            _context.Candidates.Remove(candidate);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
     }
 }

@@ -167,6 +167,9 @@ namespace ai_recruitment.Data
             }
         );
 
+            // seed role -> permission mappings (see Permissions.All for the permission catalog)
+            modelBuilder.Entity<Permission>().HasData(Features.Permissions.PermissionSeedData.Build());
+
             modelBuilder.Entity<Department>().HasData(
                 new Department { Id = 1, DepartmentName = "Human Resources" },
                 new Department { Id = 2, DepartmentName = "Information Technology" },

@@ -1,6 +1,8 @@
 ﻿using ai_recruitment.Data;
+using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.JobPosts.Dto;
 using ai_recruitment.Features.JobPosts.Model;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,7 +13,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
 
     [ApiController]
     [Route("api/[controller]")]
-    
+    [Authorize]
     public class JobController : ControllerBase
 
     {
@@ -25,6 +27,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
         }
 
         [HttpPost("insertJob")]
+        [HasPermission(PermissionNames.JobPosts.Create)]
         public async Task<IActionResult> InsertJob([FromBody] Dto.InsertJobDto jobDto)
         {
 
@@ -60,6 +63,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
         }
 
         [HttpGet("getAllJob")]
+        [HasPermission(PermissionNames.JobPosts.View)]
         public async Task<IActionResult> GetAllJobs([FromQuery] string jobStatus, [FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
 
@@ -102,6 +106,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
 
 
         [HttpGet("getJob/{id:int}")]
+        [HasPermission(PermissionNames.JobPosts.View)]
         public async Task<IActionResult> GetJobById(int id)
         {
             var job = await _context.Jobs.FindAsync(id);
@@ -131,6 +136,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
         }
 
         [HttpPut("updateJobStatus/{jobId:int}")]
+        [HasPermission(PermissionNames.JobPosts.Edit)]
         public async Task<IActionResult> UpdateJobStatus(
             int jobId,
             [FromBody] string jobStatus)
@@ -157,6 +163,7 @@ namespace ai_recruitment.Features.JobPosts.Controller
         }
 
         [HttpPut("editJob/{jobId:int}")]
+        [HasPermission(PermissionNames.JobPosts.Edit)]
         public async Task<IActionResult> EditJob(int jobId, [FromBody] InsertJobDto jobDto)
         {
             var job = await _context.Jobs.FindAsync(jobId);
@@ -188,6 +195,27 @@ namespace ai_recruitment.Features.JobPosts.Controller
                 StatusCode = 200,
                 Message = "Job updated successfully"
             });
+        }
+
+        [HttpDelete("{jobId:int}")]
+        [HasPermission(PermissionNames.JobPosts.Delete)]
+        public async Task<IActionResult> DeleteJob(int jobId)
+        {
+            var job = await _context.Jobs.FindAsync(jobId);
+
+            if (job == null)
+            {
+                return NotFound(new
+                {
+                    StatusCode = 404,
+                    Message = "Job not found"
+                });
+            }
+
+            _context.Jobs.Remove(job);
+            await _context.SaveChangesAsync();
+
+            return NoContent();
         }
 
     }

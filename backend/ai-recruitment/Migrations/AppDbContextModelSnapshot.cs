@@ -457,6 +457,288 @@ namespace ai_recruitment.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("Permissions");
+
+                    b.HasData(
+                        new
+                        {
+                            PermissionId = 1,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.view",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 2,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.create",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 3,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.edit",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 4,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.delete",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 5,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.view",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 6,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.create",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 7,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.edit",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 8,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.delete",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 9,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.view",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 10,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.schedule",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 11,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.reschedule",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 12,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "accounts.view",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 13,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "accounts.manage",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 14,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "settings.view",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 15,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "settings.manageSystemSettings",
+                            RoleId = 1
+                        },
+                        new
+                        {
+                            PermissionId = 16,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.view",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 17,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.create",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 18,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.edit",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 19,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.delete",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 20,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.view",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 21,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.create",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 22,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.edit",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 23,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.view",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 24,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.schedule",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 25,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.reschedule",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 26,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "settings.view",
+                            RoleId = 2
+                        },
+                        new
+                        {
+                            PermissionId = 27,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.view",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 28,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.create",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 29,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.edit",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 30,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.view",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 31,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.view",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 32,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.schedule",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 33,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.reschedule",
+                            RoleId = 3
+                        },
+                        new
+                        {
+                            PermissionId = 34,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.view",
+                            RoleId = 4
+                        },
+                        new
+                        {
+                            PermissionId = 35,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.view",
+                            RoleId = 4
+                        },
+                        new
+                        {
+                            PermissionId = 36,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.create",
+                            RoleId = 4
+                        },
+                        new
+                        {
+                            PermissionId = 37,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "jobposts.edit",
+                            RoleId = 4
+                        },
+                        new
+                        {
+                            PermissionId = 38,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.view",
+                            RoleId = 4
+                        },
+                        new
+                        {
+                            PermissionId = 39,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "candidates.view",
+                            RoleId = 5
+                        },
+                        new
+                        {
+                            PermissionId = 40,
+                            CreatedAt = new DateTime(2026, 10, 14, 0, 0, 0, 0, DateTimeKind.Utc),
+                            PermissionName = "interviews.view",
+                            RoleId = 5
+                        });
                 });
 
             modelBuilder.Entity("ai_recruitment.Features.Roles.Model.Role", b =>

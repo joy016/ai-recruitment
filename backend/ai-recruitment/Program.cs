@@ -1,6 +1,9 @@
 using ai_recruitment.Data;
+using ai_recruitment.Features.Authorization;
+using ai_recruitment.Features.Roles;
 using ai_recruitment.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -57,6 +60,15 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
 builder.Services.AddScoped<ITokenService, TokenService>();
+
+// Permission-based authorization: policies are created on demand for every
+// "Permission:<name>" name requested by [HasPermission], rather than being
+// registered one by one with AddPolicy.
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IPermissionService, PermissionService>();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
+builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();
 
 builder.Services.AddCors(options =>
 {
