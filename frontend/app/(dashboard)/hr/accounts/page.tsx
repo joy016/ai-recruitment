@@ -72,6 +72,7 @@ export default function AccountsPage() {
   const [toastOpen, setToastOpen] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [selectedRole, setSelectedRole] = useState({
     roleId: 0,
     roleName: "All",
@@ -106,11 +107,19 @@ export default function AccountsPage() {
       pageNumber: pageNumber,
       pageSize: pageSize,
     };
-    const users = await getUsers(payload);
-    setUsers(users.data ?? []);
-    setRowCount(users.totalCount);
-    setPageNumber(users.pageNumber);
-    setPageSize(users.pageSize);
+    setIsLoadingUsers(true);
+    try {
+      const users = await getUsers(payload);
+      setUsers(users.data ?? []);
+      setRowCount(users.totalCount);
+      setPageNumber(users.pageNumber);
+      setPageSize(users.pageSize);
+    } catch (error) {
+      console.error("Failed to load users:", error);
+      setUsers([]);
+    } finally {
+      setIsLoadingUsers(false);
+    }
   };
 
   useEffect(() => {
@@ -429,7 +438,8 @@ export default function AccountsPage() {
           columns={columns}
           data={users}
           getRowKey={(row) => row.id}
-          emptyMessage={"sample"}
+          emptyMessage="No users found."
+          loading={isLoadingUsers}
           pageSize={pageSize}
           pageNumber={pageNumber}
           totalCount={rowCount}

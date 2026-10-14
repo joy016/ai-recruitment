@@ -23,14 +23,18 @@ const NewApplicants = ({
   const [localApplicants, setLocalApplicants] = useState<NewCandidates[]>([]);
   const [pageSize, setPageSize] = useState(10);
   const [pageNumber, setPageNumber] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
 
   const fetchNewCandidates = async () => {
+    setIsLoading(true);
     try {
       const response = await getNewCandidates(pageNumber, pageSize);
       setLocalApplicants(response.data);
       setNewApplicantCount(response.totalCount);
     } catch (error) {
       console.error("Failed to fetch new candidates:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -68,6 +72,8 @@ const NewApplicants = ({
         columns={applicantsColumns}
         data={localApplicants}
         getRowKey={(a) => a.candidateId}
+        emptyMessage="No new applicants found."
+        loading={isLoading}
         pageSize={pageSize}
         pageNumber={pageNumber}
         totalCount={newApplicantCount}

@@ -15,6 +15,12 @@ export interface PermissionDefinition {
   description: string | null;
 }
 
+/** GET /api/me/permissions: the logged-in user's role and granted permissions. */
+export interface MyPermissionsResponse {
+  role: string;
+  permissions: string[];
+}
+
 export interface UpdateRolePermissionsPayload {
   permissionIds: number[];
 }

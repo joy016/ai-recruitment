@@ -3,6 +3,7 @@
 import React from "react";
 import {
   Box,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -27,6 +28,8 @@ interface CommonTableProps<T> {
   data: T[];
   getRowKey: (row: T) => string | number;
   emptyMessage?: string;
+  /** Shows skeleton rows instead of data or the empty message. */
+  loading?: boolean;
   pageSize: number;
   pageNumber: number;
   totalCount: number;
@@ -39,6 +42,7 @@ function CommonTable<T>({
   data,
   getRowKey,
   emptyMessage = "No records found.",
+  loading = false,
   pageSize,
   pageNumber,
   totalCount,
@@ -62,41 +66,63 @@ function CommonTable<T>({
             </TableRow>
           </TableHead>
           <TableBody>
-            {data.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={columns.length}>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: "#6b879c", py: 1.5, textAlign: "center" }}
-                  >
-                    {emptyMessage}
-                  </Typography>
-                </TableCell>
-              </TableRow>
-            ) : (
-              data.map((row) => (
-                <TableRow key={getRowKey(row)} hover>
-                  {columns.map((column, index) =>
-                    index === 0 ? (
-                      <TableCell key={column.key}>
-                        <Typography sx={{ fontWeight: 700, color: "#244964" }}>
-                          {column.render(row)}
-                        </Typography>
-                        {column.secondary && (
-                          <Typography variant="body2" sx={{ color: "#6b879c" }}>
-                            {column.secondary(row)}
-                          </Typography>
-                        )}
-                      </TableCell>
-                    ) : (
-                      <TableCell key={column.key}>
-                        {column.render(row)}
-                      </TableCell>
-                    ),
-                  )}
+            {loading &&
+              Array.from({ length: Math.min(pageSize, 5) }, (_, rowIndex) => (
+                <TableRow key={`skeleton-${rowIndex}`}>
+                  {columns.map((column, index) => (
+                    <TableCell key={column.key}>
+                      <Skeleton
+                        variant="text"
+                        width={index === 0 ? "70%" : "55%"}
+                      />
+                      {index === 0 && column.secondary && (
+                        <Skeleton variant="text" width="45%" />
+                      )}
+                    </TableCell>
+                  ))}
                 </TableRow>
-              ))
-            )}
+              ))}
+            {!loading &&
+              (data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length}>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: "#6b879c", py: 1.5, textAlign: "center" }}
+                    >
+                      {emptyMessage}
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((row) => (
+                  <TableRow key={getRowKey(row)} hover>
+                    {columns.map((column, index) =>
+                      index === 0 ? (
+                        <TableCell key={column.key}>
+                          <Typography
+                            sx={{ fontWeight: 700, color: "#244964" }}
+                          >
+                            {column.render(row)}
+                          </Typography>
+                          {column.secondary && (
+                            <Typography
+                              variant="body2"
+                              sx={{ color: "#6b879c" }}
+                            >
+                              {column.secondary(row)}
+                            </Typography>
+                          )}
+                        </TableCell>
+                      ) : (
+                        <TableCell key={column.key}>
+                          {column.render(row)}
+                        </TableCell>
+                      ),
+                    )}
+                  </TableRow>
+                ))
+              ))}
           </TableBody>
         </Table>
       </TableContainer>

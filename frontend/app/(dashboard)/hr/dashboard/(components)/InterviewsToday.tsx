@@ -23,17 +23,25 @@ const InterviewsToday = ({
     pageSize: 10,
     pageNumber: 1,
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchCandidates = async () => {
-      const candidate = await getCandidatesForInterviewToday(
-        paginationModel.pageNumber,
-        paginationModel.pageSize,
-      );
+      setIsLoading(true);
+      try {
+        const candidate = await getCandidatesForInterviewToday(
+          paginationModel.pageNumber,
+          paginationModel.pageSize,
+        );
 
-      console.log(candidate);
-      setInterviewsTodayCount(candidate.totalCount);
-      setData(candidate.data);
+        console.log(candidate);
+        setInterviewsTodayCount(candidate.totalCount);
+        setData(candidate.data);
+      } catch (error) {
+        console.error("Failed to fetch interviews today:", error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchCandidates();
@@ -80,6 +88,8 @@ const InterviewsToday = ({
         columns={columns}
         data={data}
         getRowKey={(a) => a.candidateId}
+        emptyMessage="No interviews scheduled for today."
+        loading={isLoading}
         pageSize={paginationModel.pageSize}
         pageNumber={paginationModel.pageNumber}
         totalCount={interviewsTodayCount}

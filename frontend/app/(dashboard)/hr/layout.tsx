@@ -354,7 +354,9 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
           >
             Human Resource Portal
           </Typography>
-          <Box sx={{ ml: "auto" }}>
+          <Box
+            sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}
+          >
             <IconButton
               aria-label="Open notifications"
               onClick={() => setNotificationsOpen(true)}
@@ -372,7 +374,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
             <Box
               onMouseEnter={(event) => setAccountAnchorEl(event.currentTarget)}
               onMouseLeave={closeAccountMenu}
-              sx={{ display: "inline-flex", ml: 1 }}
+              sx={{ display: "inline-flex", alignItems: "center" }}
             >
               <IconButton
                 aria-label="Account menu"

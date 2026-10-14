@@ -1,20 +1,37 @@
 import { PermissionDefinition } from "../types/permission";
 
 /** Known actions are shown in this order; any others follow alphabetically. */
-const ACTION_ORDER = ["view", "create", "update", "delete"];
+const ACTION_ORDER = [
+  "view",
+  "create",
+  "update",
+  "edit",
+  "delete",
+  "schedule",
+  "reschedule",
+  "manage",
+];
 
 /** Known modules are shown in this order; any others follow alphabetically. */
 const MODULE_ORDER = [
   "dashboard",
   "candidates",
   "jobs",
+  "jobposts",
+  "interviews",
   "users",
+  "accounts",
   "notifications",
   "settings",
 ];
 
 const MODULE_LABELS: Record<string, string> = {
   jobs: "Job Posts",
+  jobposts: "Job Posts",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  managesystemsettings: "Manage System Settings",
 };
 
 const toTitleCase = (value: string) =>
@@ -33,7 +50,8 @@ export const parsePermissionName = (permissionName: string) => {
 export const getModuleLabel = (module: string) =>
   MODULE_LABELS[module] ?? toTitleCase(module);
 
-export const getActionLabel = (action: string) => toTitleCase(action);
+export const getActionLabel = (action: string) =>
+  ACTION_LABELS[action] ?? toTitleCase(action);
 
 const byKnownOrder = (order: string[]) => (a: string, b: string) => {
   const indexA = order.indexOf(a);
@@ -42,6 +60,41 @@ const byKnownOrder = (order: string[]) => (a: string, b: string) => {
   if (indexA === -1) return 1;
   if (indexB === -1) return -1;
   return indexA - indexB;
+};
+
+export interface PermissionModuleGroup {
+  module: string;
+  label: string;
+  actions: string[];
+}
+
+/**
+ * Groups plain permission names by module, e.g.
+ * ["candidates.view", "candidates.edit"] -> Candidates: View, Edit.
+ */
+export const groupPermissionNames = (
+  permissionNames: string[],
+): PermissionModuleGroup[] => {
+  const actionsByModule = new Map<string, Set<string>>();
+
+  permissionNames.forEach((name) => {
+    const { module, action } = parsePermissionName(name);
+    if (!module || !action) return;
+    const actions = actionsByModule.get(module) ?? new Set<string>();
+    actions.add(action);
+    actionsByModule.set(module, actions);
+  });
+
+  const moduleSort = byKnownOrder(MODULE_ORDER);
+  const actionSort = byKnownOrder(ACTION_ORDER);
+
+  return [...actionsByModule.entries()]
+    .sort(([a], [b]) => moduleSort(a, b))
+    .map(([module, actions]) => ({
+      module,
+      label: getModuleLabel(module),
+      actions: [...actions].sort(actionSort),
+    }));
 };
 
 export interface PermissionMatrixRow {

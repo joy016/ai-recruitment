@@ -1,42 +1,34 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Box, Chip, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Skeleton, Typography } from "@mui/material";
+import { Refresh } from "@mui/icons-material";
 import SettingsSection from "./SettingsSection";
 import PermissionGroup from "./PermissionGroup";
 import { PermissionGroupData } from "../(types)/settings.types";
-import { useAppSelector } from "@/lib/store/hooks";
-import {
-  IS_PERMISSIONS_API_MOCKED,
-  getPermissionCatalog,
-  getRolePermissions,
-} from "@/lib/api/permissions";
-import { PermissionDefinition } from "@/lib/types/permission";
-import { buildPermissionMatrix, getActionLabel } from "@/lib/utils/permissions";
+import { getMyPermissions } from "@/lib/api/me";
+import { MyPermissionsResponse } from "@/lib/types/permission";
+import { getActionLabel, groupPermissionNames } from "@/lib/utils/permissions";
+
+const gridSx = {
+  display: "grid",
+  gap: 2.5,
+  gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "repeat(3, 1fr)" },
+} as const;
 
 export default function PermissionSettings() {
-  const currentUser = useAppSelector((state) => state.user.currentUser);
-  const [catalog, setCatalog] = useState<PermissionDefinition[]>([]);
-  const [assignedIds, setAssignedIds] = useState<Set<number>>(new Set());
+  const [myPermissions, setMyPermissions] =
+    useState<MyPermissionsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
-
-  const roleId = currentUser?.roleId;
-  const roleName = currentUser?.roleName;
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
-    if (roleId === undefined || !roleName) return;
-
     const loadPermissions = async () => {
       setIsLoading(true);
       setErrorMessage("");
       try {
-        const [catalogData, rolePermissions] = await Promise.all([
-          getPermissionCatalog(),
-          getRolePermissions(roleId, roleName),
-        ]);
-        setCatalog(catalogData);
-        setAssignedIds(new Set(rolePermissions.map((p) => p.permissionId)));
+        setMyPermissions(await getMyPermissions());
       } catch (error) {
         console.error("Failed to load permissions:", error);
         setErrorMessage("Unable to load your permissions.");
@@ -46,37 +38,27 @@ export default function PermissionSettings() {
     };
 
     loadPermissions();
-  }, [roleId, roleName]);
+  }, [loadAttempt]);
 
-  // Same module/action grouping as Accounts → Role & Permissions, read-only.
+  // The API only returns granted permissions, grouped here by module.
   const groups = useMemo<PermissionGroupData[]>(
     () =>
-      buildPermissionMatrix(catalog).rows.map((row) => ({
-        category: row.label,
-        permissions: Object.entries(row.cells)
-          .filter(([, permission]) => permission !== undefined)
-          .map(([action, permission]) => ({
-            label: getActionLabel(action),
-            granted: assignedIds.has(permission!.permissionId),
-          })),
+      groupPermissionNames(myPermissions?.permissions ?? []).map((group) => ({
+        category: group.label,
+        permissions: group.actions.map((action) => ({
+          label: getActionLabel(action),
+          granted: true,
+        })),
       })),
-    [catalog, assignedIds],
+    [myPermissions],
   );
 
-  const renderBody = () => {
-    if (!currentUser) {
-      return <Alert severity="info">Sign in to view your permissions.</Alert>;
-    }
+  const permissionCount = myPermissions?.permissions.length ?? 0;
 
+  const renderBody = () => {
     if (isLoading) {
       return (
-        <Box
-          sx={{
-            display: "grid",
-            gap: 2.5,
-            gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "repeat(3, 1fr)" },
-          }}
-        >
+        <Box sx={gridSx}>
           {Array.from({ length: 6 }, (_, index) => (
             <Skeleton key={index} variant="rounded" height={110} />
           ))}
@@ -85,21 +67,35 @@ export default function PermissionSettings() {
     }
 
     if (errorMessage) {
-      return <Alert severity="error">{errorMessage}</Alert>;
+      return (
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              startIcon={<Refresh />}
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {errorMessage}
+        </Alert>
+      );
     }
 
     if (groups.length === 0) {
-      return <Alert severity="info">No permissions are defined yet.</Alert>;
+      return (
+        <Alert severity="info">
+          Your role doesn&apos;t have any permissions assigned yet.
+        </Alert>
+      );
     }
 
     return (
-      <Box
-        sx={{
-          display: "grid",
-          gap: 2.5,
-          gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "repeat(3, 1fr)" },
-        }}
-      >
+      <Box sx={gridSx}>
         {groups.map((group) => (
           <PermissionGroup key={group.category} group={group} />
         ))}
@@ -116,14 +112,18 @@ export default function PermissionSettings() {
         <Typography variant="body2" sx={{ color: "#6b879c" }}>
           Current Role
         </Typography>
-        <Chip
-          size="small"
-          label={roleName ?? "—"}
-          sx={{ fontWeight: 700, color: "#1f80b6", bgcolor: "#e8f4fb" }}
-        />
-        {!isLoading && currentUser && !errorMessage && (
+        {isLoading ? (
+          <Skeleton variant="rounded" width={90} height={24} />
+        ) : (
+          <Chip
+            size="small"
+            label={myPermissions?.role ?? "—"}
+            sx={{ fontWeight: 700, color: "#1f80b6", bgcolor: "#e8f4fb" }}
+          />
+        )}
+        {!isLoading && !errorMessage && (
           <Typography variant="caption" sx={{ color: "#7d9ab0" }}>
-            {assignedIds.size} of {catalog.length} permissions
+            {permissionCount} {permissionCount === 1 ? "permission" : "permissions"}
           </Typography>
         )}
       </Box>
@@ -133,7 +133,6 @@ export default function PermissionSettings() {
       <Alert severity="info" sx={{ mt: 2.5 }}>
         This is a read-only view. Role and permission management is handled
         under Accounts → Role & Permissions.
-        {IS_PERMISSIONS_API_MOCKED && " Permissions shown are sample data for now."}
       </Alert>
     </SettingsSection>
   );

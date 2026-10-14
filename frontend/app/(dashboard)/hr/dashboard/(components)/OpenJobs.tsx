@@ -23,16 +23,20 @@ const OpenJobs = ({
   const [jobPosts, setJobPosts] = useState<JobItem[]>([]);
   const [jobPageNumber, setJobPageNumber] = useState(1);
   const [jobPageSize, setJobPageSize] = useState(JOBS_PAGE_SIZE);
+  const [isLoading, setIsLoading] = useState(true);
 
   const jobColumns = useJobColumns();
 
   const fetchInitialOpenJobs = async () => {
+    setIsLoading(true);
     try {
       const response = await getAllJobs("Open", jobPageNumber, jobPageSize);
       setJobPosts(response.data);
       setTotalJobCount(response.totalCount || 0);
     } catch (error) {
       console.error("Failed to fetch open jobs:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -70,6 +74,8 @@ const OpenJobs = ({
         columns={jobColumns}
         data={jobPosts}
         getRowKey={(a) => a.jobId}
+        emptyMessage="No open job posts found."
+        loading={isLoading}
         pageSize={jobPageSize}
         pageNumber={jobPageNumber}
         totalCount={totalJobCount}
