@@ -1,9 +1,11 @@
 using ai_recruitment.Data;
+using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Users.Dto;
 using ai_recruitment.Service;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace ai_recruitment.Features.Users.Controller
@@ -22,16 +24,22 @@ namespace ai_recruitment.Features.Users.Controller
 
         private readonly AppDbContext _context;
         private readonly ISupabaseStorageService _supabaseStorageService;
+        private readonly IUserInvitationService _invitationService;
         private readonly PasswordHasher<Model.User> _passwordHasher = new();
 
-        public UsersController(AppDbContext context, ISupabaseStorageService supabaseStorageService)
+        public UsersController(
+            AppDbContext context,
+            ISupabaseStorageService supabaseStorageService,
+            IUserInvitationService invitationService)
         {
             _context = context;
             _supabaseStorageService = supabaseStorageService;
+            _invitationService = invitationService;
         }
 
 
         [HttpPost("insertUser")]
+        [HasPermission(PermissionNames.Accounts.Manage)]
         public async Task<IActionResult> InsertUser([FromBody] CreateUserDto dto)
         {
             var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
@@ -86,28 +94,31 @@ namespace ai_recruitment.Features.Users.Controller
 
             } while (employeeIdExists);
 
+            // No password is set here: the account starts pending activation and the user
+            // sets their own initial password via the emailed invitation link.
             var user = new Model.User
             {
                 EmployeeNumber = employeeId,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 Email = normalizedEmail,
+                PasswordHash = string.Empty,
                 InsertedBy = dto.InsertedBy,
                 RoleId = dto.RoleId,
                 DepartmentId = dto.DepartmentId,
             };
 
-            user.PasswordHash = _passwordHasher
-                .HashPassword(user, dto.Password);
-
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            var invitationEmailSent = await _invitationService.IssueInvitationAsync(user);
+
             return Ok(new
             {
-                StatusMessage = "User Successfully Inserted",
+                StatusMessage = "User created. An activation invitation has been sent to their email.",
                 StatusCode = 200,
-                EmployeeId = employeeId
+                EmployeeId = employeeId,
+                InvitationEmailSent = invitationEmailSent
             });
         }
 
@@ -333,5 +344,55 @@ namespace ai_recruitment.Features.Users.Controller
             });
         }
 
+        // Anonymous: this is how the "set-password" page checks a token before even
+        // showing the form. Does not consume the token.
+        [HttpPost("validateInvitation")]
+        [AllowAnonymous]
+        [EnableRateLimiting(RateLimiterPolicies.InvitationPublic)]
+        public async Task<IActionResult> ValidateInvitation([FromBody] ValidateInvitationDto dto)
+        {
+            var result = await _invitationService.ValidateInvitationAsync(dto.Token);
+            return Ok(result);
+        }
+
+        // Anonymous: reached only via the one-time emailed link. Does not issue a JWT -
+        // the user must still log in afterward through the normal flow.
+        [HttpPost("setInitialPassword")]
+        [AllowAnonymous]
+        [EnableRateLimiting(RateLimiterPolicies.InvitationPublic)]
+        public async Task<IActionResult> SetInitialPassword([FromBody] SetInitialPasswordDto dto)
+        {
+            var result = await _invitationService.SetInitialPasswordAsync(dto);
+
+            return result.Outcome switch
+            {
+                SetInitialPasswordOutcome.Success => Ok(new { success = true, message = result.Message }),
+                SetInitialPasswordOutcome.PasswordMismatch => BadRequest(new { success = false, message = result.Message }),
+                SetInitialPasswordOutcome.WeakPassword => BadRequest(new { success = false, message = result.Message }),
+                SetInitialPasswordOutcome.InvalidOrExpiredToken => BadRequest(new { success = false, message = result.Message }),
+                _ => StatusCode(500, new { success = false, message = "Unexpected error." }),
+            };
+        }
+
+        [HttpPost("resendInvitation/{userId:guid}")]
+        [HasPermission(PermissionNames.Accounts.Manage)]
+        [EnableRateLimiting(RateLimiterPolicies.InvitationResend)]
+        public async Task<IActionResult> ResendInvitation(Guid userId)
+        {
+            var result = await _invitationService.ResendInvitationAsync(userId);
+
+            return result.Outcome switch
+            {
+                ResendInvitationOutcome.Success => Ok(new
+                {
+                    statusCode = 200,
+                    statusMessage = result.Message,
+                    invitationEmailSent = result.InvitationEmailSent
+                }),
+                ResendInvitationOutcome.UserNotFound => NotFound(new { message = result.Message }),
+                ResendInvitationOutcome.UserNotPendingActivation => Conflict(new { message = result.Message }),
+                _ => StatusCode(500, new { message = "Unexpected error." }),
+            };
+        }
     }
 }

@@ -877,6 +877,9 @@ namespace ai_recruitment.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("PasswordSetupCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasMaxLength(15)
@@ -921,9 +924,57 @@ namespace ai_recruitment.Migrations
                             IsActive = true,
                             LastName = "Developer",
                             PasswordHash = "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==",
+                            PasswordSetupCompletedAt = new DateTime(2026, 9, 23, 0, 0, 0, 0, DateTimeKind.Utc),
                             PhoneNumber = "09171234567",
                             RoleId = 1
                         });
+                });
+
+            modelBuilder.Entity("ai_recruitment.Features.Users.Model.UserInvitation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeliveryAttemptedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeliveryError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("DeliveryStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("InvalidatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserInvitations");
                 });
 
             modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Candidate", b =>
@@ -973,6 +1024,17 @@ namespace ai_recruitment.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("ai_recruitment.Features.Users.Model.UserInvitation", b =>
+                {
+                    b.HasOne("ai_recruitment.Features.Users.Model.User", "User")
+                        .WithMany("Invitations")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("ai_recruitment.Features.Departments.Model.Department", b =>
                 {
                     b.Navigation("Users");
@@ -993,6 +1055,8 @@ namespace ai_recruitment.Migrations
             modelBuilder.Entity("ai_recruitment.Features.Users.Model.User", b =>
                 {
                     b.Navigation("InterviewedCandidates");
+
+                    b.Navigation("Invitations");
                 });
 #pragma warning restore 612, 618
         }

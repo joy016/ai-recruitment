@@ -38,6 +38,14 @@ namespace ai_recruitment.Features.Authentication.Controller
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
+            // Pending-activation accounts have no usable password yet (PasswordHash is
+            // empty) - reject before ever calling the hasher, regardless of IsActive, which
+            // is the separate administrator-controlled enable/disable flag.
+            if (user.PasswordSetupCompletedAt == null)
+            {
+                return Unauthorized(new { message = "Invalid email or password." });
+            }
+
             var verificationResult = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, dto.Password);
             if (verificationResult == PasswordVerificationResult.Failed)
             {

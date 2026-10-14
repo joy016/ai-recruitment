@@ -1,14 +1,18 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Roles;
+using ai_recruitment.Features.Users;
+using ai_recruitment.Features.Users.Services;
 using ai_recruitment.Service;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Text;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,6 +73,41 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();
+
+// Invitation-based account activation.
+builder.Services.AddSingleton<IWeakPasswordChecker, CommonPasswordChecker>();
+builder.Services.AddScoped<IInvitationEmailService, N8nInvitationEmailService>();
+builder.Services.AddScoped<IUserInvitationService, UserInvitationService>();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    // Anonymous invitation endpoints: partitioned per client IP (AddFixedWindowLimiter
+    // would otherwise apply one shared global limit across every caller).
+    options.AddPolicy(RateLimiterPolicies.InvitationPublic, httpContext =>
+    {
+        var clientIp = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        return RateLimitPartition.GetFixedWindowLimiter(clientIp, _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(1),
+            PermitLimit = 10,
+            QueueLimit = 0,
+        });
+    });
+
+    // Admin-triggered resend: per authenticated caller.
+    options.AddPolicy(RateLimiterPolicies.InvitationResend, httpContext =>
+    {
+        var callerId = httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(callerId, _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromHours(1),
+            PermitLimit = 5,
+            QueueLimit = 0,
+        });
+    });
+});
 
 builder.Services.AddCors(options =>
 {
@@ -148,6 +187,8 @@ app.UseStaticFiles();
 
 // Enable CORS using the named policy
 app.UseCors("AllowFrontend");
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

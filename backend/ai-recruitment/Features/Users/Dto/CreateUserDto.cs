@@ -17,9 +17,9 @@ namespace ai_recruitment.Features.Users.Dto
         [MaxLength(255)]
         public string Email { get; set; } = string.Empty;
 
-        [Required]
-        [MinLength(8)]
-        public string Password { get; set; } = string.Empty;
+        // No password field: new accounts are created pending activation and the user sets
+        // their own initial password via the emailed invitation link. See
+        // POST /api/Users/setInitialPassword.
         [Required]
         public string InsertedBy { get; set; } = string.Empty;
 

@@ -27,6 +27,7 @@ namespace ai_recruitment.Data
         public DbSet<Role> Roles => Set<Role>();
         public DbSet<Permission> Permissions => Set<Permission>();
         public DbSet<Department> Departments => Set<Department>();
+        public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -79,6 +80,22 @@ namespace ai_recruitment.Data
             modelBuilder.Entity<Role>()
                 .HasIndex(r => r.RoleName)
                 .IsUnique();
+
+            // one User -> many UserInvitations
+            modelBuilder.Entity<UserInvitation>()
+                .HasOne(i => i.User)
+                .WithMany(u => u.Invitations)
+                .HasForeignKey(i => i.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserInvitation>()
+                .HasIndex(i => i.TokenHash)
+                .IsUnique();
+
+            // See UserInvitation.ConsumedAt for why this is the concurrency guard.
+            modelBuilder.Entity<UserInvitation>()
+                .Property(i => i.ConsumedAt)
+                .IsConcurrencyToken();
 
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(
@@ -161,6 +178,9 @@ namespace ai_recruitment.Data
                 PasswordHash = "AQAAAAIAAYagAAAAEHb035DN5pLtuO1dVDNZTkfNqoC0gQUxuDSZCH77VZCZmE++KPA/vrqv+JEjfUmXTg==",
                 InsertedBy = "system-seed",
                 IsActive = true,
+                // Pre-activated: the invitation flow only applies to users created via
+                // POST /api/Users/insertUser, not this bootstrap seed account.
+                PasswordSetupCompletedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
                 CreatedAt = new DateTime(2026, 9, 23, 0, 0, 0, DateTimeKind.Utc),
                 RoleId = 1,
                 DepartmentId = 2

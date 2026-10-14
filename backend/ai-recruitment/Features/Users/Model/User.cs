@@ -47,11 +47,19 @@ namespace ai_recruitment.Features.Users.Model
 
         public string? ProfilePictureUrl { get; set; }
 
+        // Null while the account is pending invitation-based activation (no usable password
+        // yet); set the moment the user successfully completes "set initial password". This
+        // is deliberately separate from IsActive, which remains the administrator-controlled
+        // enable/disable flag.
+        public DateTime? PasswordSetupCompletedAt { get; set; }
+
         public int RoleId { get; set; }
         public Role Role { get; set; } = null!;
 
         public ICollection<Candidate> InterviewedCandidates { get; set; } = new List<Candidate>();
         public int? DepartmentId { get; set; }
         public Department? Department { get; set; }
+
+        public ICollection<UserInvitation> Invitations { get; set; } = new List<UserInvitation>();
     }
 }
