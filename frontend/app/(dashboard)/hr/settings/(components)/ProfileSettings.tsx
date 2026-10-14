@@ -17,7 +17,8 @@ import { UserProfile } from "../(types)/settings.types";
 import { formatDateOnly } from "@/lib/utils/date";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { setUser } from "@/lib/store/features/userSlice";
-import { uploadProfilePicture } from "@/lib/api/user";
+import { updatePhoneNumber, uploadProfilePicture } from "@/lib/api/user";
+import { formatPhoneNumber, isCompletePhoneNumber } from "@/lib/utils/phone";
 
 type ProfileSettingsProps = {
   profile: UserProfile;
@@ -34,6 +35,30 @@ const saveButtonSx = {
   },
 } as const;
 
+const joinLabels = (labels: (string | null)[]) =>
+  labels.filter(Boolean).join(" and ");
+
+const describeSaveSuccess = (saved: (string | null)[]) => {
+  const text = `${joinLabels(saved)} updated successfully.`;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+/** Returns an error message when any update failed, otherwise null. */
+const describeSaveFailure = (
+  saved: (string | null)[],
+  failed: (string | null)[],
+) => {
+  const failedText = joinLabels(failed);
+  if (!failedText) {
+    return null;
+  }
+
+  const savedText = joinLabels(saved);
+  return savedText
+    ? `Your ${savedText} was updated, but the ${failedText} could not be saved. Please try again.`
+    : `Failed to update your ${failedText}. Please try again.`;
+};
+
 export default function ProfileSettings({
   profile,
   onSave,
@@ -41,6 +66,7 @@ export default function ProfileSettings({
   const [isEditing, setIsEditing] = useState(false);
   const [draftProfile, setDraftProfile] = useState<UserProfile>(profile);
   const [showSavedMessage, setShowSavedMessage] = useState(false);
+  const [savedMessage, setSavedMessage] = useState("");
 
   const currentUser = useAppSelector((state) => state.user.currentUser);
   const dispatch = useAppDispatch();
@@ -94,7 +120,10 @@ export default function ProfileSettings({
   };
 
   const handleEdit = () => {
-    setDraftProfile(profile);
+    setDraftProfile({
+      ...profile,
+      phoneNumber: formatPhoneNumber(currentUser?.phoneNumber),
+    });
     setShowSavedMessage(false);
     setIsEditing(true);
   };
@@ -107,20 +136,79 @@ export default function ProfileSettings({
   };
 
   const handleSave = async () => {
-    if (pendingPhoto && currentUser) {
-      setIsSaving(true);
-      try {
-        const response = await uploadProfilePicture(currentUser.id, pendingPhoto);
-        handlePhotoUploaded(response.photoUrl);
-        clearPendingPhoto();
-      } catch {
-        setPhotoError("Failed to upload profile picture. Please try again.");
-        return;
-      } finally {
-        setIsSaving(false);
-      }
+    if (!currentUser || isSaving) {
+      return;
     }
 
+    // Only fields that actually changed are sent. A photo counts as changed
+    // only once a file was picked, not when the picker was merely opened.
+    const originalPhone = formatPhoneNumber(currentUser.phoneNumber);
+    const nextPhone = formatPhoneNumber(draftProfile.phoneNumber);
+    const phoneChanged = nextPhone !== originalPhone;
+    const photoChanged = pendingPhoto !== null;
+
+    if (!phoneChanged && !photoChanged) {
+      setPhotoError(null);
+      setIsEditing(false);
+      return;
+    }
+
+    if (phoneChanged && !isCompletePhoneNumber(nextPhone)) {
+      setPhotoError("Please enter a complete phone number, e.g. +639 7099 80679.");
+      return;
+    }
+
+    setPhotoError(null);
+    setIsSaving(true);
+
+    // Run both requests together; one failing must not cancel the other.
+    const [photoResult, phoneResult] = await Promise.allSettled([
+      pendingPhoto
+        ? uploadProfilePicture(currentUser.id, pendingPhoto)
+        : Promise.resolve(null),
+      phoneChanged
+        ? updatePhoneNumber(currentUser.id, { phoneNumber: nextPhone })
+        : Promise.resolve(null),
+    ]);
+
+    const uploadedPhotoUrl =
+      photoResult.status === "fulfilled" ? photoResult.value?.photoUrl : null;
+    const phoneSucceeded = phoneChanged && phoneResult.status === "fulfilled";
+
+    // Keep whatever did succeed, even if the other request failed.
+    if (uploadedPhotoUrl || phoneSucceeded) {
+      dispatch(
+        setUser({
+          ...currentUser,
+          profilePictureUrl: uploadedPhotoUrl ?? currentUser.profilePictureUrl,
+          phoneNumber: phoneSucceeded ? nextPhone : currentUser.phoneNumber,
+        }),
+      );
+    }
+    if (uploadedPhotoUrl) {
+      clearPendingPhoto();
+    }
+
+    setIsSaving(false);
+
+    const outcome = {
+      saved: [
+        uploadedPhotoUrl ? "profile picture" : null,
+        phoneSucceeded ? "phone number" : null,
+      ],
+      failed: [
+        photoChanged && !uploadedPhotoUrl ? "profile picture" : null,
+        phoneChanged && !phoneSucceeded ? "phone number" : null,
+      ],
+    };
+
+    const errorMessage = describeSaveFailure(outcome.saved, outcome.failed);
+    if (errorMessage) {
+      setPhotoError(errorMessage);
+      return;
+    }
+
+    setSavedMessage(describeSaveSuccess(outcome.saved));
     onSave(draftProfile);
     setIsEditing(false);
     setShowSavedMessage(true);
@@ -169,7 +257,7 @@ export default function ProfileSettings({
             sx={{ mb: 2.5 }}
             onClose={() => setShowSavedMessage(false)}
           >
-            Profile changes saved locally. (Not yet connected to the backend.)
+            {savedMessage}
           </Alert>
         )}
 
@@ -225,20 +313,14 @@ export default function ProfileSettings({
             size="small"
             label="First Name"
             value={currentUser?.firstName}
-            onChange={(event) =>
-              handleFieldChange("firstName", event.target.value)
-            }
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Last Name"
             value={currentUser?.lastName}
-            onChange={(event) =>
-              handleFieldChange("lastName", event.target.value)
-            }
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
           <TextField
@@ -246,48 +328,46 @@ export default function ProfileSettings({
             label="Email Address"
             type="email"
             value={currentUser?.email}
-            onChange={(event) => handleFieldChange("email", event.target.value)}
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Phone Number"
-            value={currentUser?.phoneNumber}
+            value={formatPhoneNumber(
+              isEditing ? draftProfile.phoneNumber : currentUser?.phoneNumber,
+            )}
             onChange={(event) =>
-              handleFieldChange("phoneNumber", event.target.value)
+              handleFieldChange(
+                "phoneNumber",
+                formatPhoneNumber(event.target.value),
+              )
             }
+            placeholder="+639 7099 80679"
+            helperText={isEditing ? "Format: +639 XXXX XXXXX" : undefined}
             disabled={!isEditing}
             fullWidth
+            slotProps={{ htmlInput: { inputMode: "tel", maxLength: 15 } }}
           />
           <TextField
             size="small"
             label="Job Title"
             value={currentUser?.roleName}
-            onChange={(event) =>
-              handleFieldChange("jobTitle", event.target.value)
-            }
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Department"
             value={currentUser?.departmentName}
-            onChange={(event) =>
-              handleFieldChange("jobTitle", event.target.value)
-            }
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
           <TextField
             size="small"
             label="Employee ID"
             value={currentUser?.employeeNumber}
-            onChange={(event) =>
-              handleFieldChange("employeeId", event.target.value)
-            }
-            disabled={!isEditing}
+            disabled
             fullWidth
           />
         </Box>

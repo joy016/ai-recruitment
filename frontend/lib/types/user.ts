@@ -46,6 +46,10 @@ export interface EditUserPayload {
   depId: number;
 }
 
+export interface UpdatePhoneNumberPayload {
+  phoneNumber: string;
+}
+
 export interface UploadPhotoResponse {
   photoUrl: string;
 }

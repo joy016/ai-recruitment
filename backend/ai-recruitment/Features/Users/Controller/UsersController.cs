@@ -316,5 +316,22 @@ namespace ai_recruitment.Features.Users.Controller
                 statusMessage = "User status updated successfully."
             });
         }
+
+        [HttpPut("updatePhoneNumber/{id:guid}")]
+        public async Task<IActionResult> UpdateUserPhoneNumber(Guid id, [FromBody] UpdatePhoneNumberDto dto)
+        {
+            var affectedRows = await _context.Users
+                .Where (u => u.Id == id)
+                .ExecuteUpdateAsync(setters => setters
+                .SetProperty(u => u.PhoneNumber, dto.PhoneNumber));
+
+
+            return Ok(new
+            {
+                statusCode = 200,
+                statusMessage = "User phoneNumber updated successfully."
+            });
+        }
+
     }
 }

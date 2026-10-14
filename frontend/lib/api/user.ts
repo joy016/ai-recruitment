@@ -4,6 +4,7 @@ import {
   EditUserPayload,
   GetUsersPayload,
   GetUsersResponse,
+  UpdatePhoneNumberPayload,
   UploadPhotoResponse,
   UserItem,
   UserPayload,
@@ -46,6 +47,13 @@ export const updateUserStatus = async (id: string, status: boolean) => {
 
 export const editUser = async (id: string, payload: EditUserPayload) => {
   return api.put(`${USER_ENDPOINT}/editUser/${id}`, payload);
+};
+
+export const updatePhoneNumber = async (
+  id: string,
+  payload: UpdatePhoneNumberPayload,
+) => {
+  return api.put(`${USER_ENDPOINT}/updatePhoneNumber/${id}`, payload);
 };
 
 export const uploadProfilePicture = async (id: string, file: File) => {
