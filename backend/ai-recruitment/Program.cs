@@ -76,7 +76,7 @@ builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();
 
 // Invitation-based account activation.
 builder.Services.AddSingleton<IWeakPasswordChecker, CommonPasswordChecker>();
-builder.Services.AddScoped<IInvitationEmailService, N8nInvitationEmailService>();
+builder.Services.AddScoped<IInvitationEmailService, MailtrapInvitationEmailService>();
 builder.Services.AddScoped<IUserInvitationService, UserInvitationService>();
 
 builder.Services.AddRateLimiter(options =>
