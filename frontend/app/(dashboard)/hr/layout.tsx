@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { clearToken } from "@/lib/utils/token";
@@ -126,14 +127,89 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   ).length;
 
   const drawerContent = (
-    <Box sx={{ height: "100%", bgcolor: "#f7fbff" }}>
-      <Toolbar sx={{ minHeight: "72px !important" }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
-          HR Dashboard
-        </Typography>
+    <Box
+      sx={{
+        position: "relative",
+        overflow: "hidden",
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        color: "#ffffff",
+        // Same brand gradient as the login page panel.
+        background:
+          "linear-gradient(170deg, #0f3a5c 0%, #1a5f95 60%, #2f7fd0 100%)",
+      }}
+    >
+      {/* Decorative glows */}
+      <Box
+        aria-hidden
+        sx={{
+          position: "absolute",
+          width: 280,
+          height: 280,
+          borderRadius: "50%",
+          top: -120,
+          right: -140,
+          background:
+            "radial-gradient(circle, rgba(124, 92, 255, 0.4) 0%, rgba(124, 92, 255, 0) 70%)",
+          pointerEvents: "none",
+        }}
+      />
+      <Box
+        aria-hidden
+        sx={{
+          position: "absolute",
+          width: 260,
+          height: 260,
+          borderRadius: "50%",
+          bottom: -120,
+          left: -120,
+          background:
+            "radial-gradient(circle, rgba(59, 184, 164, 0.3) 0%, rgba(59, 184, 164, 0) 70%)",
+          pointerEvents: "none",
+        }}
+      />
+
+      <Toolbar
+        sx={{
+          minHeight: "72px !important",
+          py: 2.2,
+          gap: 1.3,
+          position: "relative",
+        }}
+      >
+        <Image src="/icon.png" alt="" width={40} height={40} priority />
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            noWrap
+            sx={{ fontWeight: 800, fontSize: "0.92rem", lineHeight: 1.3 }}
+          >
+            HR AI Recruitment
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{ color: "rgba(255, 255, 255, 0.65)" }}
+          >
+            Hiring dashboard
+          </Typography>
+        </Box>
       </Toolbar>
-      <Divider />
-      <List sx={{ px: 1.2, py: 1 }}>
+      <Divider sx={{ borderColor: "rgba(255, 255, 255, 0.12)" }} />
+
+      <Typography
+        variant="overline"
+        sx={{
+          px: 3,
+          pt: 2,
+          color: "rgba(255, 255, 255, 0.5)",
+          fontWeight: 700,
+          letterSpacing: "0.08em",
+          position: "relative",
+        }}
+      >
+        Menu
+      </Typography>
+      <List sx={{ px: 1.5, py: 0.5, flexGrow: 1, position: "relative" }}>
         {navItems.map((item) => {
           const selected = pathname === item.href;
           return (
@@ -148,18 +224,39 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
               }}
               selected={selected}
               sx={{
-                borderRadius: 2.2,
-                mb: 0.7,
-                color: selected ? "#12537c" : "#35566f",
+                position: "relative",
+                borderRadius: 2.5,
+                mb: 0.6,
+                py: 1.1,
+                color: selected ? "#ffffff" : "rgba(255, 255, 255, 0.75)",
                 "& .MuiListItemIcon-root": {
-                  color: selected ? "#1f80b6" : "#5f8199",
+                  color: selected ? "#ffffff" : "rgba(255, 255, 255, 0.65)",
                   minWidth: 38,
                 },
+                "& .MuiListItemText-primary": {
+                  fontWeight: selected ? 700 : 500,
+                },
+                "&:hover": {
+                  bgcolor: "rgba(255, 255, 255, 0.08)",
+                  color: "#ffffff",
+                },
                 "&.Mui-selected": {
-                  bgcolor: "#dff1fb",
+                  bgcolor: "rgba(255, 255, 255, 0.16)",
+                  boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.18)",
                 },
                 "&.Mui-selected:hover": {
-                  bgcolor: "#d1eaf8",
+                  bgcolor: "rgba(255, 255, 255, 0.2)",
+                },
+                // Accent bar on the active item, using the brand teal.
+                "&.Mui-selected::before": {
+                  content: '""',
+                  position: "absolute",
+                  left: 0,
+                  top: 10,
+                  bottom: 10,
+                  width: 3,
+                  borderRadius: 3,
+                  bgcolor: "#3bb8a4",
                 },
               }}
             >
@@ -169,6 +266,50 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
           );
         })}
       </List>
+
+      {currentUser && (
+        <Box
+          sx={{
+            position: "relative",
+            m: 1.5,
+            p: 1.3,
+            display: "flex",
+            alignItems: "center",
+            gap: 1.2,
+            borderRadius: 2.5,
+            bgcolor: "rgba(255, 255, 255, 0.1)",
+            border: "1px solid rgba(255, 255, 255, 0.14)",
+          }}
+        >
+          <Avatar
+            src={currentUser.profilePictureUrl ?? undefined}
+            sx={{
+              width: 38,
+              height: 38,
+              bgcolor: "#3bb8a4",
+              fontSize: "0.9rem",
+              fontWeight: 700,
+            }}
+          >
+            {userInitials}
+          </Avatar>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              noWrap
+              sx={{ fontWeight: 700, fontSize: "0.9rem", lineHeight: 1.3 }}
+            >
+              {currentUser.firstName} {currentUser.lastName}
+            </Typography>
+            <Typography
+              variant="caption"
+              noWrap
+              sx={{ display: "block", color: "rgba(255, 255, 255, 0.65)" }}
+            >
+              {currentUser.roleName}
+            </Typography>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 
@@ -228,9 +369,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
               </Badge>
             </IconButton>
             <Box
-              onMouseEnter={(event) =>
-                setAccountAnchorEl(event.currentTarget)
-              }
+              onMouseEnter={(event) => setAccountAnchorEl(event.currentTarget)}
               onMouseLeave={closeAccountMenu}
               sx={{ display: "inline-flex", ml: 1 }}
             >
@@ -317,7 +456,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
             "& .MuiDrawer-paper": {
               boxSizing: "border-box",
               width: "min(82vw, 320px)",
-              borderRight: "1px solid #d7e8f5",
+              borderRight: "none",
             },
           }}
         >
@@ -332,7 +471,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
             "& .MuiDrawer-paper": {
               boxSizing: "border-box",
               width: drawerWidth,
-              borderRight: "1px solid #d7e8f5",
+              borderRight: "none",
             },
           }}
         >
