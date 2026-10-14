@@ -211,7 +211,8 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
       </Typography>
       <List sx={{ px: 1.5, py: 0.5, flexGrow: 1, position: "relative" }}>
         {navItems.map((item) => {
-          const selected = pathname === item.href;
+          const selected =
+            pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <ListItemButton
               key={item.href}
