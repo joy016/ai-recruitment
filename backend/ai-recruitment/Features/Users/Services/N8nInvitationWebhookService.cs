@@ -113,9 +113,11 @@ namespace ai_recruitment.Features.Users.Services
                 var retryable = (int)response.StatusCode >= 500
                     || response.StatusCode == System.Net.HttpStatusCode.RequestTimeout;
 
+                var responseBody = await ReadSanitizedResponseBodyAsync(response, cancellationToken);
+
                 _logger.LogWarning(
-                    "n8n invitation webhook returned {StatusCode} for invitation {InvitationId} (user {UserId}), attempt {Attempt}/{Attempts}.",
-                    (int)response.StatusCode, invitationId, userId, attempt, attempts);
+                    "n8n invitation webhook returned {StatusCode} for invitation {InvitationId} (user {UserId}), attempt {Attempt}/{Attempts}. Response: {ResponseBody}",
+                    (int)response.StatusCode, invitationId, userId, attempt, attempts, responseBody);
 
                 return (false, retryable);
             }
@@ -135,6 +137,41 @@ namespace ai_recruitment.Features.Users.Services
                     invitationId, userId, attempt, attempts);
                 return (false, true);
             }
+        }
+
+        // n8n's own error responses are short diagnostic text/JSON (e.g. "workflow not
+        // active", "not registered") and never contain our data, but this is still an
+        // externally-controlled string: bound its size and refuse to log it verbatim if
+        // it happens to mention a token, so a pathological echo can never leak one.
+        private static async Task<string> ReadSanitizedResponseBodyAsync(
+            HttpResponseMessage response, CancellationToken cancellationToken)
+        {
+            string raw;
+            try
+            {
+                raw = await response.Content.ReadAsStringAsync(cancellationToken);
+            }
+            catch
+            {
+                return "(body unavailable)";
+            }
+
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return "(empty)";
+            }
+
+            var singleLine = raw.Replace('\r', ' ').Replace('\n', ' ').Trim();
+
+            if (singleLine.Contains("token", StringComparison.OrdinalIgnoreCase))
+            {
+                return "(redacted: response unexpectedly referenced a token)";
+            }
+
+            const int maxLength = 300;
+            return singleLine.Length > maxLength
+                ? string.Concat(singleLine.AsSpan(0, maxLength), "...(truncated)")
+                : singleLine;
         }
 
         // Resolves and validates both URLs up front so a configuration problem is reported
@@ -169,6 +206,17 @@ namespace ai_recruitment.Features.Users.Services
                     "{Key} must use HTTPS (plain http is only permitted for loopback addresses in Development).",
                     N8nInvitationOptions.EnvWebhookUrl);
                 return false;
+            }
+
+            // n8n only serves a "webhook-test" path while that workflow is open and
+            // listening in the editor - every invitation sent while nobody has it open
+            // fails the same way a missing/wrong URL does. This is the single most common
+            // cause of "created but could not be handed off for delivery" in production.
+            if (parsedWebhook.AbsolutePath.Contains("webhook-test", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning(
+                    "{Key} points at an n8n TEST webhook path ('webhook-test'), which only responds while the workflow is open in the n8n editor. Point it at the workflow's Production URL ('webhook' path) instead.",
+                    N8nInvitationOptions.EnvWebhookUrl);
             }
 
             if (string.IsNullOrWhiteSpace(_options.FrontendBaseUrl))

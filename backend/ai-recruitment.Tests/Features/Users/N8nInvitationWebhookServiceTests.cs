@@ -3,6 +3,7 @@ using System.Text.Json;
 using ai_recruitment.Features.Users.Model;
 using ai_recruitment.Features.Users.Services;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -23,6 +24,16 @@ namespace ai_recruitment.Tests.Features.Users
             for (var i = 0; i < times; i++)
             {
                 _responses.Enqueue(_ => new HttpResponseMessage(status));
+            }
+
+            return this;
+        }
+
+        public StubHttpMessageHandler RespondWithBody(HttpStatusCode status, string body, int times = 1)
+        {
+            for (var i = 0; i < times; i++)
+            {
+                _responses.Enqueue(_ => new HttpResponseMessage(status) { Content = new StringContent(body) });
             }
 
             return this;
@@ -52,6 +63,31 @@ namespace ai_recruitment.Tests.Features.Users
         }
     }
 
+    // Records every log call so tests can assert on the structured message/level without
+    // a real logging provider, e.g. confirming a failure is logged with its status code
+    // and that nothing sensitive (tokens, links, secrets) ever reaches it.
+    public class CapturingLogger<T> : ILogger<T>
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+        IDisposable ILogger.BeginScope<TState>(TState state) => NullScope.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add((logLevel, formatter(state, exception)));
+        }
+
+        private sealed class NullScope : IDisposable
+        {
+            public static readonly NullScope Instance = new();
+            public void Dispose() { }
+        }
+    }
+
     public class N8nInvitationWebhookServiceTests
     {
         private static readonly User InvitedUser = new()
@@ -70,7 +106,8 @@ namespace ai_recruitment.Tests.Features.Users
 
         private static N8nInvitationWebhookService CreateService(
             StubHttpMessageHandler handler,
-            Action<N8nInvitationOptions>? configure = null)
+            Action<N8nInvitationOptions>? configure = null,
+            ILogger<N8nInvitationWebhookService>? logger = null)
         {
             var options = new N8nInvitationOptions
             {
@@ -85,7 +122,7 @@ namespace ai_recruitment.Tests.Features.Users
             return new N8nInvitationWebhookService(
                 new HttpClient(handler),
                 Options.Create(options),
-                NullLogger<N8nInvitationWebhookService>.Instance);
+                logger ?? NullLogger<N8nInvitationWebhookService>.Instance);
         }
 
         private static Task<bool> PublishAsync(N8nInvitationWebhookService service, string rawToken = "raw-token-value") =>
@@ -251,6 +288,55 @@ namespace ai_recruitment.Tests.Features.Users
             await PublishAsync(service);
 
             handler.Requests[0].Headers.Contains("X-Webhook-Secret").Should().BeFalse();
+        }
+
+        [Fact]
+        public async Task PublishInvitationCreatedAsync_LogsStatusCodeAndSanitizedBody_OnFailure()
+        {
+            var handler = new StubHttpMessageHandler()
+                .RespondWithBody(HttpStatusCode.NotFound, "The requested webhook is not registered.", times: 3);
+            var logger = new CapturingLogger<N8nInvitationWebhookService>();
+            var service = CreateService(handler, logger: logger);
+
+            var delivered = await PublishAsync(service);
+
+            delivered.Should().BeFalse();
+            logger.Entries.Should().Contain(e =>
+                e.Level == LogLevel.Warning
+                && e.Message.Contains("404")
+                && e.Message.Contains("The requested webhook is not registered."));
+        }
+
+        [Fact]
+        public async Task PublishInvitationCreatedAsync_RedactsResponseBody_IfItMentionsAToken()
+        {
+            var handler = new StubHttpMessageHandler()
+                .RespondWithBody(HttpStatusCode.BadRequest, "echo: token=abc123", times: 3);
+            var logger = new CapturingLogger<N8nInvitationWebhookService>();
+            var service = CreateService(handler, logger: logger);
+
+            await PublishAsync(service);
+
+            logger.Entries.Should().NotContain(e => e.Message.Contains("abc123"),
+                "a response body must never leak back anything resembling the invitation token");
+            logger.Entries.Should().Contain(e => e.Message.Contains("redacted"));
+        }
+
+        [Fact]
+        public async Task PublishInvitationCreatedAsync_WarnsAboutTestWebhookPath_ButStillAttemptsDelivery()
+        {
+            var handler = new StubHttpMessageHandler().Respond(HttpStatusCode.OK);
+            var logger = new CapturingLogger<N8nInvitationWebhookService>();
+            var service = CreateService(
+                handler,
+                o => o.WebhookUrl = "https://n8n.example.com/webhook-test/user-invitation-created",
+                logger);
+
+            var delivered = await PublishAsync(service);
+
+            delivered.Should().BeTrue("the test-path warning is diagnostic only and must not block delivery");
+            logger.Entries.Should().Contain(e =>
+                e.Level == LogLevel.Warning && e.Message.Contains("webhook-test"));
         }
     }
 }
