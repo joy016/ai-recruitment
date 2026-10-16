@@ -5,6 +5,7 @@ import {
   Alert,
   Box,
   Button,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -34,6 +35,8 @@ const emptyAccountForm: AccountFormValues = {
   role: { roleId: 0, roleName: "" },
   department: { id: 0, departmentName: "" },
 };
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type AccountModalFormProps = {
   open: boolean;
@@ -68,11 +71,43 @@ export default function AccountModalForm({
     null,
   );
   const currentUser = useAppSelector((state) => state.user.currentUser);
+  // The email follows the suggested format until the user types their own;
+  // an existing account keeps its saved email.
+  const [isEmailCustom, setIsEmailCustom] = useState(Boolean(initialValues));
+  const [originalEmail, setOriginalEmail] = useState(
+    initialValues?.email ?? "",
+  );
+
+  // When editing, the account's own email doesn't count as "taken".
+  const takenEmails = existingEmails.filter(
+    (email) =>
+      email.trim().toLowerCase() !== originalEmail.trim().toLowerCase(),
+  );
+  const suggestedEmail = generateUniqueAccountEmail(
+    accountForm.firstName,
+    accountForm.lastName,
+    takenEmails,
+  );
+
+  const trimmedEmail = accountForm.email.trim();
+  let emailError = "";
+  if (trimmedEmail && !EMAIL_PATTERN.test(trimmedEmail)) {
+    emailError = "Enter a valid email address.";
+  } else if (
+    trimmedEmail &&
+    takenEmails.some(
+      (email) => email.trim().toLowerCase() === trimmedEmail.toLowerCase(),
+    )
+  ) {
+    emailError = "This email is already used by another account.";
+  }
 
   useEffect(() => {
     const fetchUser = async () => {
       if (!userId) return;
       const user = await getUser(userId);
+      setIsEmailCustom(true);
+      setOriginalEmail(user.email ?? "");
       setAccountForm({
         firstName: user.firstName ?? "",
         lastName: user.lastName ?? "",
@@ -88,15 +123,29 @@ export default function AccountModalForm({
   const handleNameChange = (field: "firstName" | "lastName", value: string) => {
     setAccountForm((current) => {
       const next = { ...current, [field]: value };
+      if (isEmailCustom) {
+        return next;
+      }
       return {
         ...next,
         email: generateUniqueAccountEmail(
           next.firstName,
           next.lastName,
-          existingEmails,
+          takenEmails,
         ),
       };
     });
+  };
+
+  const handleEmailChange = (value: string) => {
+    setAccountForm((current) => ({ ...current, email: value }));
+    // Clearing the field hands control back to the suggestion.
+    setIsEmailCustom(value.trim() !== "");
+  };
+
+  const handleUseSuggestedEmail = () => {
+    setAccountForm((current) => ({ ...current, email: suggestedEmail }));
+    setIsEmailCustom(false);
   };
 
   const handleRequestSubmit = async () => {
@@ -105,8 +154,13 @@ export default function AccountModalForm({
       return;
     }
 
-    if (!accountForm.email) {
-      setFormError("Unable to generate email. Please check the name fields.");
+    if (!trimmedEmail) {
+      setFormError("Email is required.");
+      return;
+    }
+
+    if (emailError) {
+      setFormError(emailError);
       return;
     }
 
@@ -119,6 +173,7 @@ export default function AccountModalForm({
       ...accountForm,
       firstName: accountForm.firstName.trim(),
       lastName: accountForm.lastName.trim(),
+      email: trimmedEmail,
     };
 
     setFormError("");
@@ -140,7 +195,7 @@ export default function AccountModalForm({
       await editUser(userId, {
         firstName: capitalizeFirstLetter(accountForm.firstName),
         lastName: capitalizeFirstLetter(accountForm.lastName),
-        email: accountForm.email,
+        email: accountForm.email.trim(),
         roleId: accountForm.role.roleId,
         depId: accountForm.department.id,
       });
@@ -148,7 +203,7 @@ export default function AccountModalForm({
       const userPayload = {
         firstName: capitalizeFirstLetter(accountForm.firstName),
         lastName: capitalizeFirstLetter(accountForm.lastName),
-        email: accountForm.email,
+        email: accountForm.email.trim(),
         password: DEFAULT_PASSWORD,
         insertedBy: currentUser?.firstName! + currentUser?.lastName!,
         roleId: accountForm.role.roleId,
@@ -224,15 +279,51 @@ export default function AccountModalForm({
             />
           </Box>
 
-          <TextField
-            size="small"
-            label="Email"
-            value={accountForm.email}
-            placeholder="Auto-generated from first and last name"
-            helperText="Auto-generated as lastname.firstname@company.com.ph (a number is appended if that email is already taken)"
-            fullWidth
-            slotProps={{ input: { readOnly: true } }}
-          />
+          <Box>
+            <TextField
+              size="small"
+              label="Email"
+              type="email"
+              value={accountForm.email}
+              onChange={(event) => handleEmailChange(event.target.value)}
+              placeholder="lastname.firstname@company.com.ph"
+              error={!!emailError}
+              helperText={
+                emailError ||
+                "Suggested from the name as lastname.firstname@company.com.ph. You can enter a different email."
+              }
+              required
+              fullWidth
+              slotProps={{ htmlInput: { autoComplete: "off" } }}
+            />
+            {suggestedEmail &&
+              suggestedEmail.toLowerCase() !== trimmedEmail.toLowerCase() && (
+                <Box
+                  sx={{
+                    mt: 0.8,
+                    display: "flex",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 0.8,
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: "#6b879c" }}>
+                    Suggested:
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={suggestedEmail}
+                    onClick={handleUseSuggestedEmail}
+                    sx={{
+                      fontWeight: 600,
+                      color: "#1f80b6",
+                      bgcolor: "#e8f4fb",
+                      "&:hover": { bgcolor: "#d8ecf8" },
+                    }}
+                  />
+                </Box>
+              )}
+          </Box>
 
           <Box>
             <Typography
@@ -310,8 +401,9 @@ export default function AccountModalForm({
 
           {!isEditing && (
             <Alert severity="info">
-              A default password will be set for this account. The user will be
-              required to reset it on first login.
+              An invitation email will be sent to this address. The user will
+              set their own password through the activation link before they
+              can log in.
             </Alert>
           )}
 

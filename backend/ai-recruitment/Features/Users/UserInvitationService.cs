@@ -13,17 +13,17 @@ namespace ai_recruitment.Features.Users
         private static readonly TimeSpan InvitationLifetime = TimeSpan.FromHours(24);
 
         private readonly AppDbContext _context;
-        private readonly IInvitationEmailService _emailService;
+        private readonly IInvitationWebhookService _invitationWebhook;
         private readonly IWeakPasswordChecker _weakPasswordChecker;
         private readonly PasswordHasher<User> _passwordHasher = new();
 
         public UserInvitationService(
             AppDbContext context,
-            IInvitationEmailService emailService,
+            IInvitationWebhookService invitationWebhook,
             IWeakPasswordChecker weakPasswordChecker)
         {
             _context = context;
-            _emailService = emailService;
+            _invitationWebhook = invitationWebhook;
             _weakPasswordChecker = weakPasswordChecker;
         }
 
@@ -53,17 +53,19 @@ namespace ai_recruitment.Features.Users
 
             _context.UserInvitations.Add(invitation);
 
-            // Persisted before the email attempt: a delivery failure below only affects
-            // DeliveryStatus, never leaves the user without a (retryable) invitation record.
+            // Persisted before the webhook attempt, which makes this row the outbox record
+            // for the delivery: if n8n is unreachable below, only DeliveryStatus changes and
+            // the user still has a valid, retryable invitation rather than no way in.
             await _context.SaveChangesAsync(cancellationToken);
 
-            var delivered = await _emailService.SendInvitationEmailAsync(user, rawToken, cancellationToken);
+            var delivered = await _invitationWebhook.PublishInvitationCreatedAsync(
+                user, invitation.Id, rawToken, invitation.ExpiresAt, cancellationToken);
 
             invitation.DeliveryStatus = delivered ? InvitationDeliveryStatus.Sent : InvitationDeliveryStatus.Failed;
             invitation.DeliveryAttemptedAt = DateTime.UtcNow;
             invitation.DeliveryError = delivered
                 ? null
-                : "Invitation email could not be delivered. Use 'resend invitation' to try again.";
+                : "The n8n invitation webhook did not accept the event. Use 'resend invitation' to try again.";
 
             await _context.SaveChangesAsync(cancellationToken);
 
@@ -74,7 +76,7 @@ namespace ai_recruitment.Features.Users
         {
             if (string.IsNullOrWhiteSpace(token))
             {
-                return new InvitationValidationResultDto { IsValid = false };
+                return InvalidInvitationResult();
             }
 
             var tokenHash = InvitationTokenGenerator.Hash(token);
@@ -85,14 +87,23 @@ namespace ai_recruitment.Features.Users
                 .Include(i => i.User)
                 .FirstOrDefaultAsync(i => i.TokenHash == tokenHash);
 
+            // Every rejection below - unknown token, expired, consumed, revoked, missing
+            // user, already-activated user - returns the same generic result, so the
+            // response can't be used to probe which accounts exist or what state they're in.
             if (invitation == null || !invitation.IsUsable(now))
             {
-                return new InvitationValidationResultDto { IsValid = false };
+                return InvalidInvitationResult();
+            }
+
+            if (invitation.User == null || invitation.User.PasswordSetupCompletedAt != null)
+            {
+                return InvalidInvitationResult();
             }
 
             return new InvitationValidationResultDto
             {
                 IsValid = true,
+                Message = "Invitation is valid.",
                 Email = invitation.User.Email,
                 ExpiresAt = invitation.ExpiresAt,
             };
@@ -100,12 +111,24 @@ namespace ai_recruitment.Features.Users
 
         public async Task<SetInitialPasswordResult> SetInitialPasswordAsync(SetInitialPasswordDto dto)
         {
-            if (dto.NewPassword != dto.ConfirmPassword)
+            // ConfirmPassword is optional: the documented API contract is { token,
+            // newPassword }, but when a client does send a confirmation it must match.
+            if (!string.IsNullOrEmpty(dto.ConfirmPassword) && dto.NewPassword != dto.ConfirmPassword)
             {
                 return new SetInitialPasswordResult
                 {
                     Outcome = SetInitialPasswordOutcome.PasswordMismatch,
                     Message = "Password and confirmation do not match.",
+                };
+            }
+
+            var policyViolation = PasswordPolicy.Validate(dto.NewPassword);
+            if (policyViolation != null)
+            {
+                return new SetInitialPasswordResult
+                {
+                    Outcome = SetInitialPasswordOutcome.PasswordRequirementsNotMet,
+                    Message = policyViolation,
                 };
             }
 
@@ -128,7 +151,7 @@ namespace ai_recruitment.Features.Users
             }
 
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == invitation.UserId);
-            if (user == null)
+            if (user == null || user.PasswordSetupCompletedAt != null)
             {
                 return InvalidTokenResult();
             }
@@ -218,7 +241,7 @@ namespace ai_recruitment.Features.Users
                 Outcome = ResendInvitationOutcome.Success,
                 Message = delivered
                     ? "A new invitation has been sent."
-                    : "A new invitation was created, but the email could not be delivered. Try resending again shortly.",
+                    : "A new invitation was created, but it could not be handed off for delivery. Try resending again shortly.",
                 InvitationEmailSent = delivered,
             };
         }
@@ -226,6 +249,12 @@ namespace ai_recruitment.Features.Users
         private static SetInitialPasswordResult InvalidTokenResult() => new()
         {
             Outcome = SetInitialPasswordOutcome.InvalidOrExpiredToken,
+            Message = "This invitation link is invalid, expired, or has already been used.",
+        };
+
+        private static InvitationValidationResultDto InvalidInvitationResult() => new()
+        {
+            IsValid = false,
             Message = "This invitation link is invalid, expired, or has already been used.",
         };
     }

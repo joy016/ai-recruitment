@@ -16,7 +16,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Delete, Edit } from "@mui/icons-material";
+import { Delete, Edit, ForwardToInboxOutlined } from "@mui/icons-material";
 import CommonTable, { CommonTableColumn } from "@/app/component/CommonTable";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
 import AccountModalForm from "./(components)/AccountModalForm";
@@ -32,7 +32,12 @@ import {
   createPageChangeHandler,
   createPageSizeChangeHandler,
 } from "@/lib/utils/pagination";
-import { getUsers, updateUserStatus } from "@/lib/api/user";
+import {
+  getUsers,
+  resendInvitation,
+  updateUserStatus,
+} from "@/lib/api/user";
+import axios from "axios";
 import { UserItem } from "@/lib/types/user";
 import { getDepartment } from "@/lib/api/department";
 import { Department } from "@/lib/types/department";
@@ -67,6 +72,10 @@ export default function AccountsPage() {
   );
 
   const [pendingDelete, setPendingDelete] = useState<UserItem | null>(null);
+  const [pendingResend, setPendingResend] = useState<UserItem | null>(null);
+  const [toastSeverity, setToastSeverity] = useState<"success" | "warning">(
+    "success",
+  );
 
   const [toastMessage, setToastMessage] = useState("");
   const [toastOpen, setToastOpen] = useState(false);
@@ -134,9 +143,55 @@ export default function AccountsPage() {
     [accounts, editingAccountId],
   );
 
-  const showToast = (message: string) => {
+  const showToast = (
+    message: string,
+    severity: "success" | "warning" = "success",
+  ) => {
     setToastMessage(message);
+    setToastSeverity(severity);
     setToastOpen(true);
+  };
+
+  const handleConfirmResendInvitation = async () => {
+    if (!pendingResend) {
+      return;
+    }
+
+    try {
+      const result = await resendInvitation(pendingResend.id);
+      const name = `${pendingResend.firstName} ${pendingResend.lastName}`;
+      if (result.invitationEmailSent) {
+        showToast(`A new invitation was sent to ${name}.`);
+      } else {
+        showToast(
+          `A new invitation was created for ${name}, but the email could not be sent. Try resending later.`,
+          "warning",
+        );
+      }
+      fetchUsers();
+    } catch (error) {
+      // Thrown errors are shown inside the confirmation dialog.
+      if (axios.isAxiosError<{ message?: string }>(error)) {
+        const status = error.response?.status;
+        if (status === 409) {
+          throw new Error(
+            "This user has already set their password, so there's no pending invitation to resend.",
+          );
+        }
+        if (status === 429) {
+          throw new Error(
+            "Too many invitations resent recently. Please try again later.",
+          );
+        }
+        if (status === 403) {
+          throw new Error("You don't have permission to resend invitations.");
+        }
+        if (error.response?.data?.message) {
+          throw new Error(error.response.data.message);
+        }
+      }
+      throw new Error("Unable to resend the invitation. Please try again.");
+    }
   };
 
   const handleOpenCreate = () => {
@@ -288,11 +343,22 @@ export default function AccountsPage() {
       render: (row) => {
         const style = getStatusChipStyle(row.isActive);
         return (
-          <Chip
-            size="small"
-            label={row.isActive ? "Active" : "Inactive"}
-            sx={{ fontWeight: 600, ...style }}
-          />
+          <Stack direction="row" spacing={0.6} sx={{ flexWrap: "wrap" }}>
+            <Chip
+              size="small"
+              label={row.isActive ? "Active" : "Inactive"}
+              sx={{ fontWeight: 600, ...style }}
+            />
+            {row.isPendingActivation && (
+              <Tooltip title="Hasn't set a password through the invitation link yet">
+                <Chip
+                  size="small"
+                  label="Pending Activation"
+                  sx={{ fontWeight: 600, color: "#9a5b00", bgcolor: "#fff3e3" }}
+                />
+              </Tooltip>
+            )}
+          </Stack>
         );
       },
     },
@@ -311,6 +377,18 @@ export default function AccountsPage() {
               <Edit fontSize="small" />
             </IconButton>
           </Tooltip>
+          {row.isPendingActivation && (
+            <Tooltip title="Resend invitation">
+              <IconButton
+                size="small"
+                aria-label={`Resend invitation to ${row.firstName} ${row.lastName}`}
+                onClick={() => setPendingResend(row)}
+                sx={{ color: "#3b9a8a" }}
+              >
+                <ForwardToInboxOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Delete user">
             <IconButton
               size="small"
@@ -475,6 +553,19 @@ export default function AccountsPage() {
         onClose={handleCancelDelete}
       />
 
+      <ConfirmationModal
+        open={Boolean(pendingResend)}
+        title="Resend invitation?"
+        description={
+          pendingResend
+            ? `A new activation link will be emailed to ${pendingResend.email}. Any previous link for this user will stop working.`
+            : undefined
+        }
+        confirmLabel="Resend Invitation"
+        onConfirm={handleConfirmResendInvitation}
+        onClose={() => setPendingResend(null)}
+      />
+
       <Snackbar
         open={toastOpen}
         autoHideDuration={3200}
@@ -482,7 +573,7 @@ export default function AccountsPage() {
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
         <Alert
-          severity="success"
+          severity={toastSeverity}
           variant="filled"
           onClose={() => setToastOpen(false)}
           sx={{ width: "100%" }}

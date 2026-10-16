@@ -28,6 +28,8 @@ export interface UserItem {
   depId: number;
   departmentName: string;
   profilePictureUrl?: string | null;
+  /** True until the user sets their initial password through the invitation link. */
+  isPendingActivation: boolean;
 }
 
 export interface GetUsersResponse {
@@ -57,4 +59,30 @@ export interface UploadPhotoResponse {
 export interface Interviewer {
   interviewerId: string;
   interviewerName: string;
+}
+
+/** GET /api/Users/validateInvitation: always 200; isValid says whether the link is usable. */
+export interface InvitationValidationResult {
+  isValid: boolean;
+  message: string;
+  email: string | null;
+  expiresAt: string | null;
+}
+
+/** Body for POST /api/Users/setInvitationPassword (backend SetInitialPasswordDto). */
+export interface SetInvitationPasswordPayload {
+  token: string;
+  newPassword: string;
+  confirmPassword?: string;
+}
+
+export interface SetInvitationPasswordResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface ResendInvitationResponse {
+  statusCode: number;
+  statusMessage: string;
+  invitationEmailSent: boolean;
 }

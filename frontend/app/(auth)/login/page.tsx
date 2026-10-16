@@ -29,9 +29,19 @@ import { setToken } from "@/lib/utils/token";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { setUser } from "@/lib/store/features/userSlice";
 import { SESSION_EXPIRED_REASON } from "@/app/component/SessionGuard";
+import { PASSWORD_SET_LOGIN_FLAG } from "@/constant/password-setup";
 
-function SessionExpiredNotice() {
+function LoginNotice() {
   const searchParams = useSearchParams();
+
+  if (searchParams.get(PASSWORD_SET_LOGIN_FLAG)) {
+    return (
+      <Alert severity="success" sx={{ mb: 2.5 }}>
+        Your password has been set successfully. You can now log in to your
+        account.
+      </Alert>
+    );
+  }
 
   if (searchParams.get("reason") !== SESSION_EXPIRED_REASON) {
     return null;
@@ -330,7 +340,7 @@ export default function LoginPage() {
           >
             {!loginError && (
               <Suspense fallback={null}>
-                <SessionExpiredNotice />
+                <LoginNotice />
               </Suspense>
             )}
             {loginError && (

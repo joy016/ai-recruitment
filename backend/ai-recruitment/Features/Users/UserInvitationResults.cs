@@ -24,6 +24,11 @@ namespace ai_recruitment.Features.Users
         Success,
         InvalidOrExpiredToken,
         PasswordMismatch,
+
+        // Fails the structural rules in PasswordPolicy (length / character classes).
+        PasswordRequirementsNotMet,
+
+        // Structurally valid but on the common-password denylist.
         WeakPassword,
     }
 

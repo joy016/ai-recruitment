@@ -38,8 +38,29 @@ namespace ai_recruitment.Features.Users.Controller
         }
 
 
+        /// <summary>Creates a pending-activation account and sends its one-time invitation via n8n.</summary>
+        /// <remarks>
+        /// No password is accepted or generated here. The account is created with an empty
+        /// PasswordHash and PasswordSetupCompletedAt = null (so it cannot log in), a 24-hour
+        /// single-use invitation token is issued, and the invitation link is handed to the
+        /// n8n webhook for emailing.
+        ///
+        /// Sample request:
+        ///
+        ///     { "firstName": "Jane", "lastName": "Doe", "email": "doe.jane@company.com", "insertedBy": "hr.admin@company.com", "roleId": 3, "departmentId": 1 }
+        ///
+        /// Sample response (200):
+        ///
+        ///     { "statusMessage": "User created. An activation invitation has been sent to their email.", "statusCode": 200, "employeeId": "EMP-JD123456", "invitationEmailSent": true }
+        ///
+        /// invitationEmailSent = false means the user and the invitation both exist, but n8n
+        /// did not accept the event - call resendInvitation to retry.
+        /// </remarks>
         [HttpPost("insertUser")]
         [HasPermission(PermissionNames.Accounts.Manage)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status409Conflict)]
         public async Task<IActionResult> InsertUser([FromBody] CreateUserDto dto)
         {
             var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
@@ -151,6 +172,7 @@ namespace ai_recruitment.Features.Users.Controller
                     LastName = u.LastName,
                     Email = u.Email,
                     IsActive = u.IsActive,
+                    IsPendingActivation = u.PasswordSetupCompletedAt == null,
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId,
@@ -186,6 +208,7 @@ namespace ai_recruitment.Features.Users.Controller
                     LastName = u.LastName,
                     Email = u.Email,
                     IsActive = u.IsActive,
+                    IsPendingActivation = u.PasswordSetupCompletedAt == null,
                     CreatedAt = u.CreatedAt,
                     UpdatedAt = u.UpdatedAt,
                     RoleId = u.RoleId,
@@ -344,23 +367,63 @@ namespace ai_recruitment.Features.Users.Controller
             });
         }
 
-        // Anonymous: this is how the "set-password" page checks a token before even
-        // showing the form. Does not consume the token.
-        [HttpPost("validateInvitation")]
+        /// <summary>Checks an invitation token without consuming it.</summary>
+        /// <remarks>
+        /// Anonymous: this is how the "set-password" page decides whether to show the form.
+        /// Always returns 200 - an unusable token yields { "isValid": false } with a generic
+        /// message, so the response can't be used to enumerate accounts.
+        ///
+        /// Sample response (valid):
+        ///
+        ///     { "isValid": true, "message": "Invitation is valid.", "email": "doe.jane@company.com", "expiresAt": "2026-10-16T10:00:00Z" }
+        ///
+        /// Sample response (invalid / expired / already used / revoked):
+        ///
+        ///     { "isValid": false, "message": "This invitation link is invalid, expired, or has already been used.", "email": null, "expiresAt": null }
+        /// </remarks>
+        [HttpGet("validateInvitation")]
         [AllowAnonymous]
         [EnableRateLimiting(RateLimiterPolicies.InvitationPublic)]
-        public async Task<IActionResult> ValidateInvitation([FromBody] ValidateInvitationDto dto)
+        [ProducesResponseType(typeof(InvitationValidationResultDto), StatusCodes.Status200OK)]
+        public async Task<IActionResult> ValidateInvitation([FromQuery] string? token)
         {
-            var result = await _invitationService.ValidateInvitationAsync(dto.Token);
+            var result = await _invitationService.ValidateInvitationAsync(token ?? string.Empty);
             return Ok(result);
         }
 
-        // Anonymous: reached only via the one-time emailed link. Does not issue a JWT -
-        // the user must still log in afterward through the normal flow.
+        /// <summary>POST form of <see cref="ValidateInvitation"/>, kept for clients that already send the token in a body.</summary>
+        [HttpPost("validateInvitation")]
+        [AllowAnonymous]
+        [EnableRateLimiting(RateLimiterPolicies.InvitationPublic)]
+        [ProducesResponseType(typeof(InvitationValidationResultDto), StatusCodes.Status200OK)]
+        public Task<IActionResult> ValidateInvitationFromBody([FromBody] ValidateInvitationDto dto) =>
+            ValidateInvitation(dto.Token);
+
+        /// <summary>Consumes an invitation token and sets the invited user's initial password.</summary>
+        /// <remarks>
+        /// Anonymous: reached only via the one-time emailed link. Does not issue a JWT -
+        /// the user must still log in afterward through the normal flow.
+        ///
+        /// Sample request:
+        ///
+        ///     { "token": "SECURE_INVITATION_TOKEN", "newPassword": "ExamplePassword123!" }
+        ///
+        /// Sample response (200):
+        ///
+        ///     { "success": true, "message": "Password created successfully. You can now log in." }
+        ///
+        /// Sample response (400):
+        ///
+        ///     { "success": false, "message": "This invitation link is invalid, expired, or has already been used." }
+        /// </remarks>
+        [HttpPost("setInvitationPassword")]
+        // Original route name, kept so existing clients don't break.
         [HttpPost("setInitialPassword")]
         [AllowAnonymous]
         [EnableRateLimiting(RateLimiterPolicies.InvitationPublic)]
-        public async Task<IActionResult> SetInitialPassword([FromBody] SetInitialPasswordDto dto)
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> SetInvitationPassword([FromBody] SetInitialPasswordDto dto)
         {
             var result = await _invitationService.SetInitialPasswordAsync(dto);
 
@@ -368,12 +431,18 @@ namespace ai_recruitment.Features.Users.Controller
             {
                 SetInitialPasswordOutcome.Success => Ok(new { success = true, message = result.Message }),
                 SetInitialPasswordOutcome.PasswordMismatch => BadRequest(new { success = false, message = result.Message }),
+                SetInitialPasswordOutcome.PasswordRequirementsNotMet => BadRequest(new { success = false, message = result.Message }),
                 SetInitialPasswordOutcome.WeakPassword => BadRequest(new { success = false, message = result.Message }),
                 SetInitialPasswordOutcome.InvalidOrExpiredToken => BadRequest(new { success = false, message = result.Message }),
                 _ => StatusCode(500, new { success = false, message = "Unexpected error." }),
             };
         }
 
+        /// <summary>Revokes the invited user's outstanding invitation and issues a fresh one.</summary>
+        /// <remarks>
+        /// Requires the Accounts.Manage permission and is rate limited to 5 calls per hour
+        /// per caller. Rejected with 409 for accounts that have already set their password.
+        /// </remarks>
         [HttpPost("resendInvitation/{userId:guid}")]
         [HasPermission(PermissionNames.Accounts.Manage)]
         [EnableRateLimiting(RateLimiterPolicies.InvitationResend)]

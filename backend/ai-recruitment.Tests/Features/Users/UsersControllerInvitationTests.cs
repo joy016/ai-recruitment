@@ -43,15 +43,15 @@ namespace ai_recruitment.Tests.Features.Users
             return context;
         }
 
-        private static UsersController CreateController(AppDbContext context, FakeInvitationEmailService? email = null) =>
-            new(context, new FakeSupabaseStorageService(), new UserInvitationService(context, email ?? new FakeInvitationEmailService(), new CommonPasswordChecker()));
+        private static UsersController CreateController(AppDbContext context, FakeInvitationWebhookService? webhook = null) =>
+            new(context, new FakeSupabaseStorageService(), new UserInvitationService(context, webhook ?? new FakeInvitationWebhookService(), new CommonPasswordChecker()));
 
         [Fact]
         public async Task InsertUser_CreatesPendingAccount_AndIssuesInvitation_WithoutAcceptingAPassword()
         {
             await using var context = await SeedRoleAsync();
-            var email = new FakeInvitationEmailService();
-            var controller = CreateController(context, email);
+            var webhook = new FakeInvitationWebhookService();
+            var controller = CreateController(context, webhook);
 
             var result = await controller.InsertUser(new CreateUserDto
             {
@@ -68,7 +68,7 @@ namespace ai_recruitment.Tests.Features.Users
             user.PasswordHash.Should().BeEmpty("no password is accepted or generated at creation time");
             user.PasswordSetupCompletedAt.Should().BeNull();
 
-            email.Calls.Should().ContainSingle(c => c.User.Id == user.Id);
+            webhook.Calls.Should().ContainSingle(c => c.User.Id == user.Id);
         }
 
         [Fact]
@@ -119,7 +119,8 @@ namespace ai_recruitment.Tests.Features.Users
 
         [Theory]
         [InlineData(nameof(UsersController.ValidateInvitation))]
-        [InlineData(nameof(UsersController.SetInitialPassword))]
+        [InlineData(nameof(UsersController.ValidateInvitationFromBody))]
+        [InlineData(nameof(UsersController.SetInvitationPassword))]
         public void PublicInvitationEndpoints_AllowAnonymousAccess(string methodName)
         {
             var method = typeof(UsersController).GetMethod(methodName);

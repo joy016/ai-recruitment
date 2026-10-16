@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
 using System.Text;
@@ -74,10 +75,36 @@ builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProv
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();
 
-// Invitation-based account activation.
+// Invitation-based account activation. Email delivery itself lives in n8n; this app
+// only publishes the invitation event to the configured webhook.
 builder.Services.AddSingleton<IWeakPasswordChecker, CommonPasswordChecker>();
-builder.Services.AddScoped<IInvitationEmailService, MailtrapInvitationEmailService>();
 builder.Services.AddScoped<IUserInvitationService, UserInvitationService>();
+
+// Environment variables win over appsettings so Render/Vercel deployments stay
+// config-only; nothing below has a hardcoded fallback value.
+builder.Services.AddOptions<N8nInvitationOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.WebhookUrl = configuration[N8nInvitationOptions.EnvWebhookUrl]
+            ?? configuration["N8n:InvitationWebhookUrl"];
+
+        options.WebhookSecret = configuration[N8nInvitationOptions.EnvWebhookSecret]
+            ?? configuration["N8n:WebhookSecret"];
+
+        // No custom env var name here: ASP.NET Core's built-in environment variable
+        // provider already maps Frontend__BaseUrl (Render) onto the "Frontend:BaseUrl"
+        // config key, which falls back to appsettings.Development.json locally.
+        options.FrontendBaseUrl = configuration["Frontend:BaseUrl"];
+
+        // Lets a developer point at a locally-running n8n over http://localhost:5678.
+        options.AllowInsecureHttp = builder.Environment.IsDevelopment();
+    });
+
+builder.Services.AddHttpClient<IInvitationWebhookService, N8nInvitationWebhookService>((provider, client) =>
+{
+    var options = provider.GetRequiredService<IOptions<N8nInvitationOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
 
 builder.Services.AddRateLimiter(options =>
 {

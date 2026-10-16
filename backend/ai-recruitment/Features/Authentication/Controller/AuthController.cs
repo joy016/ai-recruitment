@@ -72,6 +72,7 @@ namespace ai_recruitment.Features.Authentication.Controller
                     LastName = user.LastName,
                     Email = user.Email,
                     IsActive = user.IsActive,
+                    IsPendingActivation = user.PasswordSetupCompletedAt == null,
                     CreatedAt = user.CreatedAt,
                     UpdatedAt = user.UpdatedAt,
                     RoleId = user.RoleId,
