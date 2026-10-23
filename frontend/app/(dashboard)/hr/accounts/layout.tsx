@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Box, Tab, Tabs } from "@mui/material";
-import { AdminPanelSettingsOutlined, PeopleOutlined } from "@mui/icons-material";
+import {
+  AdminPanelSettingsOutlined,
+  PeopleOutlined,
+} from "@mui/icons-material";
+import PermissionGuard from "@/app/component/PermissionGuard";
+import { PERMISSIONS } from "@/constant/permissions";
 
 const ACCOUNTS_TABS = [
   {
@@ -31,53 +36,55 @@ export default function AccountsLayout({
       )?.href ?? ACCOUNTS_TABS[0].href;
 
   return (
-    <Box>
-      <Box
-        sx={{
-          mb: 2,
-          borderRadius: 3,
-          border: "1px solid #d7e8f5",
-          bgcolor: "#f7fbff",
-          overflow: "hidden",
-        }}
-      >
-        <Tabs
-          value={activeTab}
-          variant="scrollable"
-          scrollButtons="auto"
-          allowScrollButtonsMobile
-          textColor="inherit"
-          slotProps={{
-            indicator: {
-              sx: { bgcolor: "#1f80b6", height: 3, borderRadius: 2 },
-            },
-          }}
+    <PermissionGuard permission={PERMISSIONS.accounts.view}>
+      <Box>
+        <Box
           sx={{
-            "& .MuiTab-root": {
-              minHeight: 48,
-              px: 2.2,
-              textTransform: "none",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              color: "#5f7f96",
-            },
-            "& .MuiTab-root.Mui-selected": { color: "#12537c" },
+            mb: 2,
+            borderRadius: 3,
+            border: "1px solid #d7e8f5",
+            bgcolor: "#f7fbff",
+            overflow: "hidden",
           }}
         >
-          {ACCOUNTS_TABS.map((tab) => (
-            <Tab
-              key={tab.href}
-              value={tab.href}
-              label={tab.label}
-              icon={tab.icon}
-              iconPosition="start"
-              component={Link}
-              href={tab.href}
-            />
-          ))}
-        </Tabs>
+          <Tabs
+            value={activeTab}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+            textColor="inherit"
+            slotProps={{
+              indicator: {
+                sx: { bgcolor: "#1f80b6", height: 3, borderRadius: 2 },
+              },
+            }}
+            sx={{
+              "& .MuiTab-root": {
+                minHeight: 48,
+                px: 2.2,
+                textTransform: "none",
+                fontWeight: 600,
+                fontSize: "0.9rem",
+                color: "#5f7f96",
+              },
+              "& .MuiTab-root.Mui-selected": { color: "#12537c" },
+            }}
+          >
+            {ACCOUNTS_TABS.map((tab) => (
+              <Tab
+                key={tab.href}
+                value={tab.href}
+                label={tab.label}
+                icon={tab.icon}
+                iconPosition="start"
+                component={Link}
+                href={tab.href}
+              />
+            ))}
+          </Tabs>
+        </Box>
+        {children}
       </Box>
-      {children}
-    </Box>
+    </PermissionGuard>
   );
 }

@@ -32,15 +32,13 @@ import {
   createPageChangeHandler,
   createPageSizeChangeHandler,
 } from "@/lib/utils/pagination";
-import {
-  getUsers,
-  resendInvitation,
-  updateUserStatus,
-} from "@/lib/api/user";
+import { getUsers, resendInvitation, updateUserStatus } from "@/lib/api/user";
 import axios from "axios";
 import { UserItem } from "@/lib/types/user";
 import { getDepartment } from "@/lib/api/department";
 import { Department } from "@/lib/types/department";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { PERMISSIONS } from "@/constant/permissions";
 
 type AccountStatusFilter = (typeof ACCOUNT_STATUS_FILTERS)[number];
 
@@ -58,6 +56,9 @@ const createAccountId = () => {
 };
 
 export default function AccountsPage() {
+  const { hasPermission } = usePermissions();
+  // Creating, editing, deactivating and re-inviting users all need accounts.manage.
+  const canManage = hasPermission(PERMISSIONS.accounts.manage);
   const [accounts, setAccounts] = useState<Account[]>(DUMMY_ACCOUNTS);
   const [statusFilter, setStatusFilter] =
     useState<AccountStatusFilter>("Active");
@@ -153,7 +154,7 @@ export default function AccountsPage() {
   };
 
   const handleConfirmResendInvitation = async () => {
-    if (!pendingResend) {
+    if (!pendingResend || !canManage) {
       return;
     }
 
@@ -195,6 +196,7 @@ export default function AccountsPage() {
   };
 
   const handleOpenCreate = () => {
+    if (!canManage) return;
     setEditingAccountId(null);
     setEditingValues(null);
     setFormModalKey((key) => key + 1);
@@ -202,6 +204,7 @@ export default function AccountsPage() {
   };
 
   const handleOpenEdit = (account: UserItem) => {
+    if (!canManage) return;
     setEditingAccountId(account.id);
     setEditingValues({
       firstName: account.firstName,
@@ -257,6 +260,7 @@ export default function AccountsPage() {
   };
 
   const handleRequestDelete = (account: UserItem) => {
+    if (!canManage) return;
     setPendingDelete(account);
   };
 
@@ -265,7 +269,7 @@ export default function AccountsPage() {
   };
 
   const handleConfirmDelete = async () => {
-    if (!pendingDelete) {
+    if (!pendingDelete || !canManage) {
       return;
     }
 
@@ -382,7 +386,7 @@ export default function AccountsPage() {
               <IconButton
                 size="small"
                 aria-label={`Resend invitation to ${row.firstName} ${row.lastName}`}
-                onClick={() => setPendingResend(row)}
+                onClick={() => canManage && setPendingResend(row)}
                 sx={{ color: "#3b9a8a" }}
               >
                 <ForwardToInboxOutlined fontSize="small" />
@@ -439,22 +443,24 @@ export default function AccountsPage() {
           </Typography>
         </Box>
 
-        <Button
-          variant="contained"
-          onClick={handleOpenCreate}
-          sx={{
-            textTransform: "none",
-            borderRadius: 2,
-            fontWeight: 700,
-            px: 2,
-            background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
-            "&:hover": {
-              background: "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
-            },
-          }}
-        >
-          + Create User
-        </Button>
+        {canManage && (
+          <Button
+            variant="contained"
+            onClick={handleOpenCreate}
+            sx={{
+              textTransform: "none",
+              borderRadius: 2,
+              fontWeight: 700,
+              px: 2,
+              background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
+              "&:hover": {
+                background: "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
+              },
+            }}
+          >
+            + Create User
+          </Button>
+        )}
       </Box>
 
       <Box
@@ -513,7 +519,11 @@ export default function AccountsPage() {
 
       <Box sx={{ mt: 2.5 }}>
         <CommonTable
-          columns={columns}
+          columns={
+            canManage
+              ? columns
+              : columns.filter((column) => column.key !== "actions")
+          }
           data={users}
           getRowKey={(row) => row.id}
           emptyMessage="No users found."

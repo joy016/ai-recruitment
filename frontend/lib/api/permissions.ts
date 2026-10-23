@@ -1,3 +1,5 @@
+import BackendServer from "@/constant/server-address";
+import { api } from "../api-client";
 import {
   Permission,
   PermissionDefinition,
@@ -7,6 +9,24 @@ import {
   mockGetPermissionCatalog,
   mockGetRolePermissions,
 } from "./permissions.mock";
+
+const PERMISSIONS_ENDPOINT = `${BackendServer}/api/Permissions`;
+
+/**
+ * Real API: permissions assigned to a role (a plain array, one row per
+ * permission). This is the source of truth for the logged-in user's access.
+ */
+export const getAllPermissions = async (
+  roleId: number,
+): Promise<Permission[]> => {
+  return api.get<Permission[]>(`${PERMISSIONS_ENDPOINT}/getAllPermissions`, {
+    params: { roleId },
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Role & Permissions management screen (still mocked; not used for access checks)
+// ---------------------------------------------------------------------------
 
 /**
  * The permissions endpoints are not available yet, so these functions are

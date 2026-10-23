@@ -52,6 +52,8 @@ type CandidateTableProps = {
   ) => void;
   onScheduleChange: (applicantId: string, value: string) => void;
   onEditStatus: (applicantId: string) => void;
+  /** Whether the user may change a candidate's status or interview schedule. */
+  canEdit: boolean;
   onSaveStatus: (applicantId: string) => void;
   onCancelStatus: (applicantId: string) => void;
   pageNumber: number;
@@ -78,6 +80,7 @@ export default function CandidateTable({
   onStatusChange,
   onScheduleChange,
   onEditStatus,
+  canEdit,
   onSaveStatus,
   onCancelStatus,
   pageNumber,
@@ -257,15 +260,17 @@ export default function CandidateTable({
                         )}
 
                         {!isEditing ? (
-                          <Tooltip title="Edit status or schedule">
-                            <IconButton
-                              aria-label={`Edit status for ${candidate.firstName} ${candidate.lastName}`}
-                              onClick={() => onEditStatus(candidate.id)}
-                              sx={{ color: "#1f80b6" }}
-                            >
-                              <Edit />
-                            </IconButton>
-                          </Tooltip>
+                          canEdit ? (
+                            <Tooltip title="Edit status or schedule">
+                              <IconButton
+                                aria-label={`Edit status for ${candidate.firstName} ${candidate.lastName}`}
+                                onClick={() => onEditStatus(candidate.id)}
+                                sx={{ color: "#1f80b6" }}
+                              >
+                                <Edit />
+                              </IconButton>
+                            </Tooltip>
+                          ) : null
                         ) : (
                           <Stack direction="row" spacing={0.3}>
                             <IconButton
@@ -400,9 +405,7 @@ export default function CandidateTable({
                       {isEditing ? (
                         <FormControl size="small" sx={{ minWidth: 170 }}>
                           <Select
-                            value={
-                              draftStatusByApplicantId[candidate.id] ?? ""
-                            }
+                            value={draftStatusByApplicantId[candidate.id] ?? ""}
                             onChange={(event) =>
                               onStatusChange(candidate.id, event)
                             }
@@ -424,15 +427,17 @@ export default function CandidateTable({
                     <TableCell>
                       <Stack direction="row" spacing={0.6}>
                         {!isEditing ? (
-                          <Tooltip title="Edit status or schedule">
-                            <IconButton
-                              aria-label={`Edit status for ${candidate.firstName} ${candidate.lastName}`}
-                              onClick={() => onEditStatus(candidate.id)}
-                              sx={{ color: "#1f80b6" }}
-                            >
-                              <Edit />
-                            </IconButton>
-                          </Tooltip>
+                          canEdit ? (
+                            <Tooltip title="Edit status or schedule">
+                              <IconButton
+                                aria-label={`Edit status for ${candidate.firstName} ${candidate.lastName}`}
+                                onClick={() => onEditStatus(candidate.id)}
+                                sx={{ color: "#1f80b6" }}
+                              >
+                                <Edit />
+                              </IconButton>
+                            </Tooltip>
+                          ) : null
                         ) : (
                           <>
                             <Tooltip title="Save status">

@@ -31,6 +31,8 @@ import {
   createMuiPageChangeHandler,
   createMuiPageSizeChangeHandler,
 } from "@/lib/utils/pagination";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { PERMISSIONS } from "@/constant/permissions";
 
 const formatScheduleForDisplay = (value: string) => {
   if (!value) {
@@ -71,6 +73,9 @@ const toDateTimeLocalValue = (value: string | undefined) => {
 };
 
 function CandidateProfileContent() {
+  const { hasPermission } = usePermissions();
+  // Updating status and scheduling interviews go through updateCandidateStatus.
+  const canEditCandidates = hasPermission(PERMISSIONS.candidates.edit);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const searchParams = useSearchParams();
@@ -343,6 +348,7 @@ function CandidateProfileContent() {
   };
 
   const handleSaveStatus = async (applicantId: string) => {
+    if (!canEditCandidates) return;
     const nextStatusId = draftStatusByApplicantId[applicantId];
     const isRescheduleOnly = !hasStatusChange(applicantId);
 
@@ -448,6 +454,7 @@ function CandidateProfileContent() {
   };
 
   const handleScheduleSave = () => {
+    if (!canEditCandidates) return;
     if (!scheduleModalApplicantId) {
       return;
     }
@@ -479,6 +486,7 @@ function CandidateProfileContent() {
   };
 
   const handleEditStatus = (applicantId: string) => {
+    if (!canEditCandidates) return;
     setEditingApplicantId(applicantId);
   };
 
@@ -503,6 +511,7 @@ function CandidateProfileContent() {
       </Typography>
 
       <CandidateTable
+        canEdit={canEditCandidates}
         isMobile={isMobile}
         isLoading={isLoadingCandidates}
         candidates={candidates}

@@ -22,6 +22,8 @@ import CardContainer from "@/app/component/CardContainer";
 import OpenJobs from "./(components)/OpenJobs";
 import NewApplicants from "./(components)/NewApplicants";
 import InterviewsToday from "./(components)/InterviewsToday";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { PERMISSIONS } from "@/constant/permissions";
 
 // Fixed-order categorical palette (identity color), validated for CVD-safe
 // adjacency - see the dataviz color-formula: never cycle or reorder per chart.
@@ -126,6 +128,11 @@ const interviewSchedule = [
 ];
 
 export default function HrDashboardPage() {
+  const { hasPermission } = usePermissions();
+  // Each card/widget loads its own data, so it only renders with permission.
+  const canViewJobs = hasPermission(PERMISSIONS.jobPosts.view);
+  const canViewCandidates = hasPermission(PERMISSIONS.candidates.view);
+  const canViewInterviews = hasPermission(PERMISSIONS.interviews.view);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const pieChartHeight = isMobile ? 320 : 260;
@@ -154,19 +161,29 @@ export default function HrDashboardPage() {
         label: "Open Jobs",
         value: String(totalJobCount),
         isLoading: false,
+        visible: canViewJobs,
       },
       {
         label: "New Applicants",
         value: String(newApplicantCount),
         isLoading: false,
+        visible: canViewCandidates,
       },
       {
         label: "Interviews Today",
         value: String(interviewsTodayCount),
         isLoading: false,
+        visible: canViewInterviews,
       },
+    ].filter((card) => card.visible),
+    [
+      totalJobCount,
+      newApplicantCount,
+      interviewsTodayCount,
+      canViewJobs,
+      canViewCandidates,
+      canViewInterviews,
     ],
-    [totalJobCount, newApplicantCount, interviewsTodayCount],
   );
 
   const handleCardClick = (label: string) => {
@@ -267,23 +284,29 @@ export default function HrDashboardPage() {
           </Grid>
         ))}
       </Grid>
-      <OpenJobs
-        setTotalJobCount={setTotalJobCount}
-        totalJobCount={totalJobCount}
-        isVisible={activeCard === "Open Jobs"}
-      />
+      {canViewJobs && (
+        <OpenJobs
+          setTotalJobCount={setTotalJobCount}
+          totalJobCount={totalJobCount}
+          isVisible={activeCard === "Open Jobs"}
+        />
+      )}
 
-      <NewApplicants
-        isVisible={activeCard === "New Applicants"}
-        setNewApplicantCount={setNewApplicantCount}
-        newApplicantCount={newApplicantCount}
-      />
+      {canViewCandidates && (
+        <NewApplicants
+          isVisible={activeCard === "New Applicants"}
+          setNewApplicantCount={setNewApplicantCount}
+          newApplicantCount={newApplicantCount}
+        />
+      )}
 
-      <InterviewsToday
-        isVisible={activeCard === "Interviews Today"}
-        setInterviewsTodayCount={setInterviewsTodayCount}
-        interviewsTodayCount={interviewsTodayCount}
-      />
+      {canViewInterviews && (
+        <InterviewsToday
+          isVisible={activeCard === "Interviews Today"}
+          setInterviewsTodayCount={setInterviewsTodayCount}
+          interviewsTodayCount={interviewsTodayCount}
+        />
+      )}
 
       <CardContainer>
         <Box

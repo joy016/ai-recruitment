@@ -24,6 +24,8 @@ import {
 } from "@mui/material";
 import { Check, MoreHoriz } from "@mui/icons-material";
 import { getAllJobs, getJobDetails, updateJobStatus } from "@/lib/api/job";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { PERMISSIONS } from "@/constant/permissions";
 import { JobDetailsResponse, JobItem } from "@/lib/types/job";
 import JobModalForm, {
   employmentTypes,
@@ -110,6 +112,11 @@ const formatPostedDate = (value: string) => {
 };
 
 export default function JobsPage() {
+  const { hasPermission } = usePermissions();
+  const canCreateJob = hasPermission(PERMISSIONS.jobPosts.create);
+  // Editing details and changing a job's status both need jobposts.edit.
+  const canEditJob = hasPermission(PERMISSIONS.jobPosts.edit);
+  const canViewApplicants = hasPermission(PERMISSIONS.candidates.view);
   const [jobPosts, setJobPosts] = useState<JobItem[]>([]);
   const [searchKeyword, setSearchKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | JobStatus>("Open");
@@ -324,6 +331,7 @@ export default function JobsPage() {
     event: React.MouseEvent<HTMLElement>,
     jobPost: JobItem,
   ) => {
+    if (!canEditJob) return;
     setStatusMenuAnchor(event.currentTarget);
     setStatusMenuJob(jobPost);
   };
@@ -347,7 +355,7 @@ export default function JobsPage() {
   };
 
   const handleConfirmStatusUpdate = async () => {
-    if (!pendingStatusUpdate) {
+    if (!pendingStatusUpdate || !canEditJob) {
       return;
     }
 
@@ -366,6 +374,7 @@ export default function JobsPage() {
   };
 
   const handleOpenCreateJob = () => {
+    if (!canCreateJob) return;
     setEditingJobId(null);
     setEditingJobValues(null);
     setCreateJobModalKey((key) => key + 1);
@@ -373,6 +382,7 @@ export default function JobsPage() {
   };
 
   const handleOpenEditJob = async (jobPost: JobItem) => {
+    if (!canEditJob) return;
     setLoadingEditJobId(jobPost.jobId);
     try {
       const details = await getJobDetails(jobPost.jobId);
@@ -433,21 +443,24 @@ export default function JobsPage() {
           <Typography variant="body2" sx={{ color: "#5f7f96", mt: 0.8 }}>
             Create your first job posting to start receiving applications.
           </Typography>
-          <Button
-            variant="contained"
-            onClick={handleOpenCreateJob}
-            sx={{
-              mt: 1.4,
-              textTransform: "none",
-              borderRadius: 2,
-              background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
-              "&:hover": {
-                background: "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
-              },
-            }}
-          >
-            + Create Job Post
-          </Button>
+          {canCreateJob && (
+            <Button
+              variant="contained"
+              onClick={handleOpenCreateJob}
+              sx={{
+                mt: 1.4,
+                textTransform: "none",
+                borderRadius: 2,
+                background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
+                "&:hover": {
+                  background:
+                    "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
+                },
+              }}
+            >
+              + Create Job Post
+            </Button>
+          )}
         </Paper>
       );
     }
@@ -559,15 +572,17 @@ export default function JobsPage() {
                     useFlexGap
                     sx={{ flexWrap: "wrap" }}
                   >
-                    <Button
-                      component={Link}
-                      href={`/hr/candidates?jobId=${jobPost.jobId}`}
-                      variant="outlined"
-                      size="small"
-                      sx={{ textTransform: "none", borderRadius: 2 }}
-                    >
-                      View Applicants
-                    </Button>
+                    {canViewApplicants && (
+                      <Button
+                        component={Link}
+                        href={`/hr/candidates?jobId=${jobPost.jobId}`}
+                        variant="outlined"
+                        size="small"
+                        sx={{ textTransform: "none", borderRadius: 2 }}
+                      >
+                        View Applicants
+                      </Button>
+                    )}
                     <Button
                       variant="contained"
                       size="small"
@@ -586,28 +601,34 @@ export default function JobsPage() {
                     >
                       Application Form
                     </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => handleOpenEditJob(jobPost)}
-                      disabled={loadingEditJobId === jobPost.jobId}
-                      startIcon={
-                        loadingEditJobId === jobPost.jobId ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : undefined
-                      }
-                      sx={{ textTransform: "none", borderRadius: 2 }}
-                    >
-                      Edit
-                    </Button>
-                    <IconButton
-                      size="small"
-                      aria-label={`More actions for ${jobPost.jobTitle}`}
-                      onClick={(event) => handleOpenStatusMenu(event, jobPost)}
-                      sx={{ border: "1px solid #d8e8f4", borderRadius: 2 }}
-                    >
-                      <MoreHoriz fontSize="small" />
-                    </IconButton>
+                    {canEditJob && (
+                      <>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => handleOpenEditJob(jobPost)}
+                          disabled={loadingEditJobId === jobPost.jobId}
+                          startIcon={
+                            loadingEditJobId === jobPost.jobId ? (
+                              <CircularProgress size={14} color="inherit" />
+                            ) : undefined
+                          }
+                          sx={{ textTransform: "none", borderRadius: 2 }}
+                        >
+                          Edit
+                        </Button>
+                        <IconButton
+                          size="small"
+                          aria-label={`More actions for ${jobPost.jobTitle}`}
+                          onClick={(event) =>
+                            handleOpenStatusMenu(event, jobPost)
+                          }
+                          sx={{ border: "1px solid #d8e8f4", borderRadius: 2 }}
+                        >
+                          <MoreHoriz fontSize="small" />
+                        </IconButton>
+                      </>
+                    )}
                   </Stack>
                 </Box>
               </Paper>
@@ -653,22 +674,24 @@ export default function JobsPage() {
           </Typography>
         </Box>
 
-        <Button
-          variant="contained"
-          onClick={handleOpenCreateJob}
-          sx={{
-            textTransform: "none",
-            borderRadius: 2,
-            fontWeight: 700,
-            px: 2,
-            background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
-            "&:hover": {
-              background: "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
-            },
-          }}
-        >
-          + Create Job Post
-        </Button>
+        {canCreateJob && (
+          <Button
+            variant="contained"
+            onClick={handleOpenCreateJob}
+            sx={{
+              textTransform: "none",
+              borderRadius: 2,
+              fontWeight: 700,
+              px: 2,
+              background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
+              "&:hover": {
+                background: "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
+              },
+            }}
+          >
+            + Create Job Post
+          </Button>
+        )}
       </Box>
 
       <Paper

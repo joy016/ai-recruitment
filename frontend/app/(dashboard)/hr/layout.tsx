@@ -8,6 +8,9 @@ import { clearToken } from "@/lib/utils/token";
 import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { clearUser } from "@/lib/store/features/userSlice";
 import SessionGuard from "@/app/component/SessionGuard";
+import PermissionsLoader from "@/app/component/PermissionsLoader";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { DASHBOARD_PERMISSIONS, PERMISSIONS } from "@/constant/permissions";
 import {
   AppBar,
   Avatar,
@@ -48,11 +51,40 @@ import {
 
 const drawerWidth = 260;
 
-const navItems = [
-  { label: "Dashboard", href: "/hr/dashboard", icon: <Dashboard /> },
-  { label: "Candidates", href: "/hr/candidates", icon: <Group /> },
-  { label: "Job Posts", href: "/hr/jobs", icon: <Description /> },
-  { label: "Accounts", href: "/hr/accounts", icon: <ManageAccounts /> },
+type NavItem = {
+  label: string;
+  href: string;
+  icon: React.ReactElement;
+  /** Shown when the user has any of these; omitted = available to every user. */
+  requiredAny?: readonly string[];
+};
+
+const navItems: NavItem[] = [
+  {
+    label: "Dashboard",
+    href: "/hr/dashboard",
+    icon: <Dashboard />,
+    requiredAny: DASHBOARD_PERMISSIONS,
+  },
+  {
+    label: "Candidates",
+    href: "/hr/candidates",
+    icon: <Group />,
+    requiredAny: [PERMISSIONS.candidates.view],
+  },
+  {
+    label: "Job Posts",
+    href: "/hr/jobs",
+    icon: <Description />,
+    requiredAny: [PERMISSIONS.jobPosts.view],
+  },
+  {
+    label: "Accounts",
+    href: "/hr/accounts",
+    icon: <ManageAccounts />,
+    requiredAny: [PERMISSIONS.accounts.view],
+  },
+  // Personal profile, security and own-permissions view: every signed-in user.
   { label: "Settings", href: "/hr/settings", icon: <Settings /> },
 ];
 
@@ -110,6 +142,11 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((state) => state.user.currentUser);
+  const { hasAnyPermission } = usePermissions();
+  // Gated items stay hidden until permissions load (deny by default).
+  const visibleNavItems = navItems.filter(
+    (item) => !item.requiredAny || hasAnyPermission(item.requiredAny),
+  );
   const userInitials = currentUser
     ? `${currentUser.firstName.charAt(0)}${currentUser.lastName.charAt(0)}`.toUpperCase()
     : "HR";
@@ -210,7 +247,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
         Menu
       </Typography>
       <List sx={{ px: 1.5, py: 0.5, flexGrow: 1, position: "relative" }}>
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const selected =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
@@ -318,6 +355,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f2f9ff" }}>
       <CssBaseline />
       <SessionGuard />
+      <PermissionsLoader />
       <AppBar
         position="fixed"
         elevation={0}

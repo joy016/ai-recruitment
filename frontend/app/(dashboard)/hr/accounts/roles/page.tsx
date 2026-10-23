@@ -33,6 +33,9 @@ import {
   updateRolePermissions,
 } from "@/lib/api/permissions";
 import { PermissionDefinition } from "@/lib/types/permission";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { PERMISSIONS } from "@/constant/permissions";
+import { useAppSelector } from "@/lib/store/hooks";
 import { buildPermissionMatrix } from "@/lib/utils/permissions";
 
 type Toast = { severity: "success" | "warning"; message: string };
@@ -51,6 +54,12 @@ const primaryButtonSx = {
 const toIdSet = (ids: number[]) => new Set(ids);
 
 export default function RolePermissionsPage() {
+  const { hasPermission, refreshPermissions } = usePermissions();
+  // Viewing needs accounts.view (route guard); changing anything needs accounts.manage.
+  const canManage = hasPermission(PERMISSIONS.accounts.manage);
+  const currentRoleId = useAppSelector(
+    (state) => state.user.currentUser?.roleId,
+  );
   const [roles, setRoles] = useState<Role[]>([]);
   const [catalog, setCatalog] = useState<PermissionDefinition[]>([]);
   const [isLoadingSetup, setIsLoadingSetup] = useState(true);
@@ -116,7 +125,9 @@ export default function RolePermissionsPage() {
       } catch (error) {
         console.error("Failed to load role permissions:", error);
         if (!cancelled) {
-          setRoleError(`Unable to load permissions for ${selectedRole.roleName}.`);
+          setRoleError(
+            `Unable to load permissions for ${selectedRole.roleName}.`,
+          );
         }
       } finally {
         if (!cancelled) setIsLoadingRole(false);
@@ -142,6 +153,7 @@ export default function RolePermissionsPage() {
   const isBusy = isLoadingRole || !!roleError;
 
   const handleToggle = (permissionId: number) => {
+    if (!canManage) return;
     setDraftIds((current) => {
       const next = new Set(current);
       if (next.has(permissionId)) next.delete(permissionId);
@@ -151,6 +163,7 @@ export default function RolePermissionsPage() {
   };
 
   const handleToggleModule = (permissionIds: number[], grant: boolean) => {
+    if (!canManage) return;
     setDraftIds((current) => {
       const next = new Set(current);
       permissionIds.forEach((id) => (grant ? next.add(id) : next.delete(id)));
@@ -190,7 +203,7 @@ export default function RolePermissionsPage() {
   };
 
   const handleConfirmSave = async () => {
-    if (!selectedRole) return;
+    if (!selectedRole || !canManage) return;
 
     const result = await updateRolePermissions(selectedRole.roleId, [
       ...draftIds,
@@ -198,6 +211,10 @@ export default function RolePermissionsPage() {
 
     if (result.persisted) {
       setSavedIds(new Set(draftIds));
+      // Editing your own role changes what you can do: reload immediately.
+      if (selectedRole.roleId === currentRoleId) {
+        refreshPermissions();
+      }
       setToast({
         severity: "success",
         message: `Permissions for ${selectedRole.roleName} saved.`,
@@ -245,7 +262,9 @@ export default function RolePermissionsPage() {
     }
 
     if (roles.length === 0) {
-      return <Alert severity="info">No roles found. Create a role first.</Alert>;
+      return (
+        <Alert severity="info">No roles found. Create a role first.</Alert>
+      );
     }
 
     if (matrix.rows.length === 0) {
@@ -300,7 +319,7 @@ export default function RolePermissionsPage() {
           matrix={matrix}
           assignedIds={draftIds}
           changedIds={changedIds}
-          disabled={isLoadingRole}
+          disabled={isLoadingRole || !canManage}
           onToggle={handleToggle}
           onToggleModule={handleToggleModule}
         />
@@ -344,20 +363,24 @@ export default function RolePermissionsPage() {
           </Typography>
         </Box>
 
-        <Tooltip
-          title={hasChanges ? "Save or cancel your permission changes first." : ""}
-        >
-          <span>
-            <Button
-              variant="contained"
-              onClick={() => setCreateRoleOpen(true)}
-              disabled={isLoadingSetup || !!setupError || hasChanges}
-              sx={primaryButtonSx}
-            >
-              + New Role
-            </Button>
-          </span>
-        </Tooltip>
+        {canManage && (
+          <Tooltip
+            title={
+              hasChanges ? "Save or cancel your permission changes first." : ""
+            }
+          >
+            <span>
+              <Button
+                variant="contained"
+                onClick={() => setCreateRoleOpen(true)}
+                disabled={isLoadingSetup || !!setupError || hasChanges}
+                sx={primaryButtonSx}
+              >
+                + New Role
+              </Button>
+            </span>
+          </Tooltip>
+        )}
       </Box>
 
       {IS_PERMISSIONS_API_MOCKED && (
@@ -378,7 +401,14 @@ export default function RolePermissionsPage() {
           justifyContent: "space-between",
         }}
       >
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.2, alignItems: "center" }}>
+        <Box
+          sx={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 1.2,
+            alignItems: "center",
+          }}
+        >
           <Select
             size="small"
             value={selectedRoleId ?? ""}
@@ -425,24 +455,30 @@ export default function RolePermissionsPage() {
           )}
         </Box>
 
-        <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end" }}>
-          <Button
-            variant="text"
-            onClick={handleCancel}
-            disabled={!hasChanges || isBusy}
-            sx={{ textTransform: "none" }}
+        {canManage && (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ justifyContent: "flex-end" }}
           >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => setConfirmSaveOpen(true)}
-            disabled={!hasChanges || isBusy}
-            sx={primaryButtonSx}
-          >
-            Save Changes
-          </Button>
-        </Stack>
+            <Button
+              variant="text"
+              onClick={handleCancel}
+              disabled={!hasChanges || isBusy}
+              sx={{ textTransform: "none" }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => setConfirmSaveOpen(true)}
+              disabled={!hasChanges || isBusy}
+              sx={primaryButtonSx}
+            >
+              Save Changes
+            </Button>
+          </Stack>
+        )}
       </Box>
 
       {selectedRole?.description && (
