@@ -1,4 +1,5 @@
 using ai_recruitment.Data;
+using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Roles;
 using ai_recruitment.Features.Users;
@@ -105,6 +106,34 @@ builder.Services.AddHttpClient<IInvitationWebhookService, N8nInvitationWebhookSe
     var options = provider.GetRequiredService<IOptions<N8nInvitationOptions>>().Value;
     client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
 });
+
+// Dynamic applicant screening: candidate + job data -> n8n "applicant-screening" webhook,
+// delivered durably via an outbox table + background dispatcher so a down/slow n8n never
+// delays or fails the candidate's submission request.
+builder.Services.AddOptions<N8nScreeningOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.WebhookUrl = configuration[N8nScreeningOptions.EnvWebhookUrl]
+            ?? configuration["N8n:ScreeningWebhookUrl"];
+
+        options.WebhookSecret = configuration[N8nScreeningOptions.EnvWebhookSecret]
+            ?? configuration["N8n:ScreeningWebhookSecret"];
+
+        options.CallbackSecret = configuration[N8nScreeningOptions.EnvCallbackSecret]
+            ?? configuration["N8n:ScreeningCallbackSecret"];
+
+        options.AllowInsecureHttp = builder.Environment.IsDevelopment();
+    });
+
+builder.Services.AddHttpClient<IApplicantScreeningWebhookService, N8nApplicantScreeningWebhookService>((provider, client) =>
+{
+    var options = provider.GetRequiredService<IOptions<N8nScreeningOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
+
+builder.Services.AddSingleton<ScreeningOutboxChannel>();
+builder.Services.AddScoped<IScreeningRequestPublisher, ScreeningRequestPublisher>();
+builder.Services.AddHostedService<ScreeningOutboxDispatcher>();
 
 builder.Services.AddRateLimiter(options =>
 {

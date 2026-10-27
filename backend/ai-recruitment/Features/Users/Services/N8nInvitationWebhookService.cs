@@ -53,8 +53,16 @@ namespace ai_recruitment.Features.Users.Services
 
             var attempts = Math.Max(1, _options.MaxAttempts);
 
+            // Scheme + host + path only - never the query string - so nothing sensitive
+            // ever reaches this log line even if a future change adds one.
+            var sanitizedDestination = webhookUri.GetLeftPart(UriPartial.Path);
+
             for (var attempt = 1; attempt <= attempts; attempt++)
             {
+                _logger.LogInformation(
+                    "Sending invitation webhook to {WebhookDestination} for invitation {InvitationId} (user {UserId}), attempt {Attempt}/{Attempts}.",
+                    sanitizedDestination, invitationId, user.Id, attempt, attempts);
+
                 var (delivered, retryable) = await TrySendAsync(
                     webhookUri, payload, invitationId, user.Id, attempt, attempts, cancellationToken);
 
@@ -103,8 +111,8 @@ namespace ai_recruitment.Features.Users.Services
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.LogInformation(
-                        "Published user.invitation.created to n8n for invitation {InvitationId} (user {UserId}) on attempt {Attempt}.",
-                        invitationId, userId, attempt);
+                        "Webhook HTTP Status: {StatusCode}. Invitation webhook delivered successfully for invitation {InvitationId} (user {UserId}) on attempt {Attempt}.",
+                        (int)response.StatusCode, invitationId, userId, attempt);
                     return (true, false);
                 }
 
@@ -116,7 +124,7 @@ namespace ai_recruitment.Features.Users.Services
                 var responseBody = await ReadSanitizedResponseBodyAsync(response, cancellationToken);
 
                 _logger.LogWarning(
-                    "n8n invitation webhook returned {StatusCode} for invitation {InvitationId} (user {UserId}), attempt {Attempt}/{Attempts}. Response: {ResponseBody}",
+                    "Failed to send invitation webhook. Webhook HTTP Status: {StatusCode} for invitation {InvitationId} (user {UserId}), attempt {Attempt}/{Attempts}. Response: {ResponseBody}",
                     (int)response.StatusCode, invitationId, userId, attempt, attempts, responseBody);
 
                 return (false, retryable);

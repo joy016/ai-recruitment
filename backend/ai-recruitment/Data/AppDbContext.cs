@@ -1,4 +1,5 @@
-﻿using ai_recruitment.Features.ApplicationStatuses.Model;
+﻿using ai_recruitment.Features.ApplicantScreening.Model;
+using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.Departments.Model;
 using ai_recruitment.Features.JobPosts.Model;
@@ -28,6 +29,8 @@ namespace ai_recruitment.Data
         public DbSet<Permission> Permissions => Set<Permission>();
         public DbSet<Department> Departments => Set<Department>();
         public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
+        public DbSet<ApplicantScreening> ApplicantScreenings => Set<ApplicantScreening>();
+        public DbSet<ScreeningWebhookOutbox> ScreeningWebhookOutboxEntries => Set<ScreeningWebhookOutbox>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -96,6 +99,27 @@ namespace ai_recruitment.Data
             modelBuilder.Entity<UserInvitation>()
                 .Property(i => i.ConsumedAt)
                 .IsConcurrencyToken();
+
+            // One screening result per candidate application - the callback endpoint
+            // upserts against this instead of ever inserting a second row.
+            modelBuilder.Entity<ApplicantScreening>()
+                .HasIndex(s => s.CandidateId)
+                .IsUnique();
+
+            modelBuilder.Entity<ApplicantScreening>()
+                .HasOne(s => s.Candidate)
+                .WithMany()
+                .HasForeignKey(s => s.CandidateId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ApplicantScreening>()
+                .HasOne(s => s.Job)
+                .WithMany()
+                .HasForeignKey(s => s.JobId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ScreeningWebhookOutbox>()
+                .HasIndex(o => new { o.Status, o.NextAttemptAt });
 
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(

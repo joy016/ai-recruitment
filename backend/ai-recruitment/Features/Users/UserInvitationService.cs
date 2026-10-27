@@ -15,16 +15,19 @@ namespace ai_recruitment.Features.Users
         private readonly AppDbContext _context;
         private readonly IInvitationWebhookService _invitationWebhook;
         private readonly IWeakPasswordChecker _weakPasswordChecker;
+        private readonly ILogger<UserInvitationService> _logger;
         private readonly PasswordHasher<User> _passwordHasher = new();
 
         public UserInvitationService(
             AppDbContext context,
             IInvitationWebhookService invitationWebhook,
-            IWeakPasswordChecker weakPasswordChecker)
+            IWeakPasswordChecker weakPasswordChecker,
+            ILogger<UserInvitationService> logger)
         {
             _context = context;
             _invitationWebhook = invitationWebhook;
             _weakPasswordChecker = weakPasswordChecker;
+            _logger = logger;
         }
 
         public async Task<bool> IssueInvitationAsync(User user, CancellationToken cancellationToken = default)
@@ -58,6 +61,10 @@ namespace ai_recruitment.Features.Users
             // the user still has a valid, retryable invitation rather than no way in.
             await _context.SaveChangesAsync(cancellationToken);
 
+            _logger.LogInformation(
+                "Dispatching invitation webhook for user {UserId} (invitation {InvitationId}).",
+                user.Id, invitation.Id);
+
             var delivered = await _invitationWebhook.PublishInvitationCreatedAsync(
                 user, invitation.Id, rawToken, invitation.ExpiresAt, cancellationToken);
 
@@ -68,6 +75,19 @@ namespace ai_recruitment.Features.Users
                 : "The n8n invitation webhook did not accept the event. Use 'resend invitation' to try again.";
 
             await _context.SaveChangesAsync(cancellationToken);
+
+            if (delivered)
+            {
+                _logger.LogInformation(
+                    "Invitation webhook delivered for user {UserId} (invitation {InvitationId}).",
+                    user.Id, invitation.Id);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Invitation webhook was not delivered for user {UserId} (invitation {InvitationId}). The invitation row remains valid and retryable via resend.",
+                    user.Id, invitation.Id);
+            }
 
             return delivered;
         }

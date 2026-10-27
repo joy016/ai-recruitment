@@ -1,7 +1,9 @@
-﻿using ai_recruitment.Data;
+using ai_recruitment.Data;
+using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates;
 using ai_recruitment.Features.Candidates.Dto;
+using ai_recruitment.Service;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -18,21 +20,37 @@ namespace ai_recruitment.Features.Candidates.controller
     [Authorize]
     public class CandidatesController : ControllerBase
     {
+        private const long MaxResumeFileSize = 5 * 1024 * 1024; // 5MB
+
+        // Extension -> expected MIME type. Also doubles as the set of allowed extensions.
+        private static readonly Dictionary<string, string> AllowedResumeContentTypesByExtension =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                [".pdf"] = "application/pdf",
+                [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            };
+
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _environment;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<CandidatesController> _logger;
+        private readonly IScreeningRequestPublisher _screeningRequestPublisher;
+        private readonly ISupabaseStorageService _supabaseStorageService;
 
         public CandidatesController(
             AppDbContext context,
-            IWebHostEnvironment environment, IHttpClientFactory httpClientFactory, IConfiguration configuration, ILogger<CandidatesController> logger)
+            IHttpClientFactory httpClientFactory,
+            IConfiguration configuration,
+            ILogger<CandidatesController> logger,
+            IScreeningRequestPublisher screeningRequestPublisher,
+            ISupabaseStorageService supabaseStorageService)
         {
             _context = context;
-            _environment = environment;
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _logger = logger;
+            _screeningRequestPublisher = screeningRequestPublisher;
+            _supabaseStorageService = supabaseStorageService;
         }
 
 
@@ -54,6 +72,18 @@ namespace ai_recruitment.Features.Candidates.controller
                 });
             }
 
+            // The screening webhook depends entirely on the referenced Job existing, so
+            // this is validated up front instead of letting a bad JobId surface later as
+            // an FK violation on SaveChangesAsync.
+            var jobExists = await _context.Jobs.AnyAsync(j => j.JobId == dto.JobId);
+            if (!jobExists)
+            {
+                return BadRequest(new
+                {
+                    message = "The selected job could not be found."
+                });
+            }
+
             // Validate resume
             if (dto.Resume == null || dto.Resume.Length == 0)
             {
@@ -63,21 +93,7 @@ namespace ai_recruitment.Features.Candidates.controller
                 });
             }
 
-            var extension =
-                Path.GetExtension(dto.Resume.FileName).ToLowerInvariant();
-
-            if (extension != ".pdf")
-            {
-                return BadRequest(new
-                {
-                    message = "Only PDF resume files are allowed."
-                });
-            }
-
-            // 5MB limit
-            const long maxFileSize = 5 * 1024 * 1024;
-
-            if (dto.Resume.Length > maxFileSize)
+            if (dto.Resume.Length > MaxResumeFileSize)
             {
                 return BadRequest(new
                 {
@@ -85,35 +101,48 @@ namespace ai_recruitment.Features.Candidates.controller
                 });
             }
 
-            // Create resume upload directory
-            var uploadsFolder = Path.Combine(
-                _environment.WebRootPath ?? "wwwroot",
-                "uploads",
-                "resumes"
-            );
+            var extension = Path.GetExtension(dto.Resume.FileName).ToLowerInvariant();
 
-            Directory.CreateDirectory(uploadsFolder);
-
-            // Generate unique filename
-            var uniqueFileName =
-                $"{Guid.NewGuid()}{extension}";
-
-            var filePath = Path.Combine(
-                uploadsFolder,
-                uniqueFileName
-            );
-
-            // Save file
-            await using (var stream = new FileStream(
-                filePath,
-                FileMode.Create))
+            // Buffered once (max 5MB) and reused for: the file-signature check below, the
+            // Supabase upload, and the existing "candidate-created" webhook's multipart
+            // attachment further down - IFormFile's own backing stream is only reliably
+            // readable once per request.
+            byte[] resumeBytes;
+            using (var buffer = new MemoryStream())
             {
-                await dto.Resume.CopyToAsync(stream);
+                await dto.Resume.CopyToAsync(buffer);
+                resumeBytes = buffer.ToArray();
+            }
+
+            if (!TryValidateResumeFile(dto.Resume, extension, resumeBytes, out var validationError))
+            {
+                return BadRequest(new { message = validationError });
+            }
+
+            // Generated up front (rather than left to EF/Postgres) so it can be used to
+            // build the Supabase storage path before the Candidate row exists.
+            var candidateId = Guid.NewGuid();
+            var storagePath = $"candidates/{candidateId}/{Guid.NewGuid()}{extension}";
+
+            try
+            {
+                using var uploadStream = new MemoryStream(resumeBytes);
+                await _supabaseStorageService.UploadAsync(
+                    _supabaseStorageService.ResumeBucket, storagePath, uploadStream, dto.Resume.ContentType);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to upload resume to Supabase storage for prospective Candidate {CandidateId}.", candidateId);
+                return StatusCode(StatusCodes.Status502BadGateway, new
+                {
+                    message = "Failed to upload resume. Please try again."
+                });
             }
 
             // Create candidate
             var candidate = new model.Candidate
             {
+                Id = candidateId,
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 EmailAddress = dto.Email,
@@ -122,7 +151,9 @@ namespace ai_recruitment.Features.Candidates.controller
                 LinkedInProfile = dto.LinkedInUrl,
                 CoverLetter = dto.CoverLetter,
                 ResumeFileName = dto.Resume.FileName,
-                ResumeFilePath = $"/uploads/resumes/{uniqueFileName}",
+                // The Supabase object path (bucket is config, not stored per-row) - not a
+                // URL. Signed download URLs are generated on demand and never persisted.
+                ResumeFilePath = storagePath,
                 Role = dto.Role,
                 JobId = dto.JobId,
                 SourcOfApplication = dto.SourceOfApplication,
@@ -135,10 +166,31 @@ namespace ai_recruitment.Features.Candidates.controller
 
             _context.Candidates.Add(candidate);
 
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                // Compensate: the resume already made it to Supabase, but the applicant
+                // record didn't - don't leave an orphaned file or an incomplete record.
+                _logger.LogError(ex, "Failed to save Candidate {CandidateId} after resume upload; cleaning up the uploaded resume.", candidateId);
+                await _supabaseStorageService.DeleteAsync(_supabaseStorageService.ResumeBucket, storagePath);
+
+                return StatusCode(StatusCodes.Status500InternalServerError, new
+                {
+                    message = "Failed to save your application. Please try again."
+                });
+            }
 
 
             // Candidate now has its generated ID because SaveChangesAsync() has completed.
+
+            // Dynamic AI screening: writes a durable outbox row (see ScreeningWebhookOutbox)
+            // keyed off candidate.JobId and signals the background dispatcher to deliver it.
+            // This never throws and never delays the response below - if n8n is unreachable,
+            // the dispatcher retries later and the candidate submission still succeeds.
+            await _screeningRequestPublisher.PublishAsync(candidate, HttpContext.RequestAborted);
 
             // Build multipart/form-data content to send candidate data + actual resume file
             var httpClient = _httpClientFactory.CreateClient();
@@ -167,76 +219,45 @@ namespace ai_recruitment.Features.Candidates.controller
             form.Add(Field(candidate.SourcOfApplication ?? string.Empty), "sourceOfApplication");
             form.Add(Field(candidate.ApplicantStatusId.ToString()), "applicantStatusId");
 
-            // Resolve physical path to the saved resume
-            var webRoot = _environment.WebRootPath ?? "wwwroot";
-            var relativePath = (candidate.ResumeFilePath ?? string.Empty).TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-            var physicalPath = Path.Combine(webRoot, relativePath);
-
-            if (!string.IsNullOrWhiteSpace(relativePath) && System.IO.File.Exists(physicalPath))
+            try
             {
+                using var resumeStream = new MemoryStream(resumeBytes);
+                var streamContent = new StreamContent(resumeStream);
+                streamContent.Headers.ContentType = new MediaTypeHeaderValue(dto.Resume.ContentType);
+
+                // 'resume' is the required multipart field name
+                form.Add(streamContent, "resume", candidate.ResumeFileName!);
+
+                // Post the multipart form
+                HttpResponseMessage response;
                 try
                 {
-                    await using var fileStream = System.IO.File.OpenRead(physicalPath);
-                    var streamContent = new StreamContent(fileStream);
-                    streamContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
-
-                    // 'resume' is the required multipart field name
-                    form.Add(streamContent, "resume", candidate.ResumeFileName!);
-
-                    // Post the multipart form
-                    HttpResponseMessage response;
-                    try
-                    {
-                        response = await httpClient.PostAsync(webhookUrl, form);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Failed to POST candidate resume to n8n webhook '{WebhookUrl}' for Candidate {CandidateId}", webhookUrl, candidate.Id);
-                        // Do not fail the request - candidate already saved successfully
-                        return CreatedAtAction(
-                            nameof(GetCandidate),
-                            new { id = candidate.Id },
-                            candidate
-                        );
-                    }
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var body = await response.Content.ReadAsStringAsync();
-                        _logger.LogWarning("n8n webhook returned non-success status {StatusCode} for Candidate {CandidateId}. Response body: {Body}", response.StatusCode, candidate.Id, body);
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Successfully posted candidate {CandidateId} to n8n webhook {WebhookUrl}", candidate.Id, webhookUrl);
-                    }
+                    response = await httpClient.PostAsync(webhookUrl, form);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error reading resume file at path {Path} for Candidate {CandidateId}", physicalPath, candidate.Id);
+                    _logger.LogError(ex, "Failed to POST candidate resume to n8n webhook '{WebhookUrl}' for Candidate {CandidateId}", webhookUrl, candidate.Id);
+                    // Do not fail the request - candidate already saved successfully
+                    return CreatedAtAction(
+                        nameof(GetCandidate),
+                        new { id = candidate.Id },
+                        candidate
+                    );
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var body = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning("n8n webhook returned non-success status {StatusCode} for Candidate {CandidateId}. Response body: {Body}", response.StatusCode, candidate.Id, body);
+                }
+                else
+                {
+                    _logger.LogInformation("Successfully posted candidate {CandidateId} to n8n webhook {WebhookUrl}", candidate.Id, webhookUrl);
                 }
             }
-            else
+            catch (Exception ex)
             {
-                _logger.LogWarning("Resume file not found at path {Path} for Candidate {CandidateId}. Skipping webhook file upload.", physicalPath, candidate.Id);
-
-                // Still attempt to call webhook with form fields only (without binary)
-                try
-                {
-                    var response = await httpClient.PostAsync(webhookUrl, form);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        var body = await response.Content.ReadAsStringAsync();
-                        _logger.LogWarning("n8n webhook returned non-success status {StatusCode} for Candidate {CandidateId} when sending form-only. Response body: {Body}", response.StatusCode, candidate.Id, body);
-                    }
-                    else
-                    {
-                        _logger.LogInformation("Successfully posted candidate (form-only) {CandidateId} to n8n webhook {WebhookUrl}", candidate.Id, webhookUrl);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to POST candidate (form-only) to n8n webhook '{WebhookUrl}' for Candidate {CandidateId}", webhookUrl, candidate.Id);
-                }
+                _logger.LogError(ex, "Error attaching resume to n8n webhook request for Candidate {CandidateId}", candidate.Id);
             }
 
             return CreatedAtAction(
@@ -262,6 +283,69 @@ namespace ai_recruitment.Features.Candidates.controller
             }
 
             return Ok(candidate);
+        }
+
+        // Backs the "View Resume" action in the Candidates module. The frontend only ever
+        // supplies the candidate id - the storage path comes exclusively from the DB row,
+        // never from the caller, so this can't be used to sign an arbitrary object path.
+        [HttpGet("{id:guid}/resume-url")]
+        [HasPermission(PermissionNames.Candidates.View)]
+        public async Task<IActionResult> GetResumeUrl(Guid id)
+        {
+            var candidate = await _context.Candidates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (candidate == null)
+            {
+                return NotFound(new { message = "Candidate not found." });
+            }
+
+            if (string.IsNullOrWhiteSpace(candidate.ResumeFilePath))
+            {
+                return NotFound(new { message = "This candidate has no uploaded resume." });
+            }
+
+            string signedUrl;
+            try
+            {
+                signedUrl = await _supabaseStorageService.CreateSignedUrlAsync(
+                    _supabaseStorageService.ResumeBucket,
+                    candidate.ResumeFilePath,
+                    _supabaseStorageService.ResumeSignedUrlExpirationSeconds);
+            }
+            catch (SupabaseObjectNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Resume object missing in Supabase storage for Candidate {CandidateId}.", id);
+                return NotFound(new { message = "Resume file could not be found in storage." });
+            }
+            catch (Exception ex)
+            {
+                // Never surface the exception message (could include the bucket/path or
+                // Supabase's own response body) back to the client.
+                _logger.LogError(ex, "Failed to generate a signed resume URL for Candidate {CandidateId}.", id);
+                return StatusCode(StatusCodes.Status502BadGateway, new
+                {
+                    message = "Could not generate the resume link right now. Please try again."
+                });
+            }
+
+            var extension = Path.GetExtension(candidate.ResumeFileName ?? candidate.ResumeFilePath).ToLowerInvariant();
+            var contentType = AllowedResumeContentTypesByExtension.TryGetValue(extension, out var mime)
+                ? mime
+                : "application/octet-stream";
+
+            // The response body carries a live, usable credential (the signed URL) - never
+            // let it be cached by a proxy or the browser.
+            Response.Headers.CacheControl = "no-store";
+
+            return Ok(new ResumeUrlDto
+            {
+                Url = signedUrl,
+                ExpiresAt = DateTime.UtcNow.AddSeconds(_supabaseStorageService.ResumeSignedUrlExpirationSeconds),
+                FileName = candidate.ResumeFileName,
+                ContentType = contentType,
+            });
         }
 
         [HttpGet("getCandidates")]
@@ -469,6 +553,52 @@ namespace ai_recruitment.Features.Candidates.controller
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        private static bool TryValidateResumeFile(IFormFile resume, string extension, byte[] content, out string error)
+        {
+            error = string.Empty;
+
+            if (!AllowedResumeContentTypesByExtension.TryGetValue(extension, out var expectedContentType))
+            {
+                error = "Only PDF and DOCX resume files are allowed.";
+                return false;
+            }
+
+            if (!string.Equals(resume.ContentType, expectedContentType, StringComparison.OrdinalIgnoreCase))
+            {
+                error = $"The resume's content type does not match a {extension} file.";
+                return false;
+            }
+
+            if (!HasValidFileSignature(extension, content))
+            {
+                error = "The resume file's content does not match its extension.";
+                return false;
+            }
+
+            return true;
+        }
+
+        // Extension + declared Content-Type can both be spoofed by the client; this checks
+        // the file's actual magic bytes so a renamed file can't masquerade as a PDF/DOCX.
+        private static bool HasValidFileSignature(string extension, byte[] content)
+        {
+            if (extension == ".pdf")
+            {
+                // "%PDF"
+                return content.Length >= 4
+                    && content[0] == 0x25 && content[1] == 0x50 && content[2] == 0x44 && content[3] == 0x46;
+            }
+
+            if (extension == ".docx")
+            {
+                // .docx is an OOXML/ZIP container - standard ZIP local file header signature "PK\x03\x04".
+                return content.Length >= 4
+                    && content[0] == 0x50 && content[1] == 0x4B && content[2] == 0x03 && content[3] == 0x04;
+            }
+
+            return false;
         }
     }
 }

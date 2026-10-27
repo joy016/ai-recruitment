@@ -25,16 +25,19 @@ namespace ai_recruitment.Features.Users.Controller
         private readonly AppDbContext _context;
         private readonly ISupabaseStorageService _supabaseStorageService;
         private readonly IUserInvitationService _invitationService;
+        private readonly ILogger<UsersController> _logger;
         private readonly PasswordHasher<Model.User> _passwordHasher = new();
 
         public UsersController(
             AppDbContext context,
             ISupabaseStorageService supabaseStorageService,
-            IUserInvitationService invitationService)
+            IUserInvitationService invitationService,
+            ILogger<UsersController> logger)
         {
             _context = context;
             _supabaseStorageService = supabaseStorageService;
             _invitationService = invitationService;
+            _logger = logger;
         }
 
 
@@ -131,6 +134,10 @@ namespace ai_recruitment.Features.Users.Controller
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "User created successfully: {UserId} ({EmployeeId}).",
+                user.Id, employeeId);
 
             var invitationEmailSent = await _invitationService.IssueInvitationAsync(user);
 

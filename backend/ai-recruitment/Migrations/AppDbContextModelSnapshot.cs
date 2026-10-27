@@ -22,6 +22,103 @@ namespace ai_recruitment.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("ai_recruitment.Features.ApplicantScreening.Model.ApplicantScreening", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("integer");
+
+                    b.PrimitiveCollection<string[]>("MatchedSkills")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.PrimitiveCollection<string[]>("MissingSkills")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<int?>("QualificationScore")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Recommendation")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ScreenedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ScreeningStatus")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Summary")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidateId")
+                        .IsUnique();
+
+                    b.HasIndex("JobId");
+
+                    b.ToTable("ApplicantScreenings");
+                });
+
+            modelBuilder.Entity("ai_recruitment.Features.ApplicantScreening.Model.ScreeningWebhookOutbox", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("CandidateId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.ToTable("ScreeningWebhookOutboxEntries");
+                });
+
             modelBuilder.Entity("ai_recruitment.Features.ApplicationStatuses.Model.ApplicantStatus", b =>
                 {
                     b.Property<int>("StatusId")
@@ -975,6 +1072,25 @@ namespace ai_recruitment.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("UserInvitations");
+                });
+
+            modelBuilder.Entity("ai_recruitment.Features.ApplicantScreening.Model.ApplicantScreening", b =>
+                {
+                    b.HasOne("ai_recruitment.Features.Candidates.model.Candidate", "Candidate")
+                        .WithMany()
+                        .HasForeignKey("CandidateId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("ai_recruitment.Features.JobPosts.Model.Job", "Job")
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Candidate");
+
+                    b.Navigation("Job");
                 });
 
             modelBuilder.Entity("ai_recruitment.Features.Candidates.model.Candidate", b =>

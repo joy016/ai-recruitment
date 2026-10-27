@@ -13,6 +13,14 @@ export interface CreateCandidatePayload {
   JobId: number;
 }
 
+/** GET /api/Candidates/{id}/resume-url — a short-lived signed URL; never cache it. */
+export interface ResumeUrlResponse {
+  url: string;
+  expiresAt: string;
+  fileName: string | null;
+  contentType: string;
+}
+
 export interface UpdateStatusPayload {
   id: string;
   applicantStatusId: number;

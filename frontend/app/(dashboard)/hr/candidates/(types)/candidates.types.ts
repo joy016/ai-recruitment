@@ -19,7 +19,8 @@ export interface Candidate {
   yearsOfExperience: string;
   interviewSched: string | null;
   applicantStatusId: number;
-  resumePath: string;
+  /** Supabase storage object path (not a URL); null when no resume was uploaded. */
+  resumePath: string | null;
 }
 
 /** Reusable paginated list response; `T` is the item type. */

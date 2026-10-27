@@ -32,6 +32,27 @@ import { ApplicantStatusItem } from "@/lib/api/applicant-status";
 const TABLE_HEIGHT = { xs: "62vh", md: "68vh" };
 const DEFAULT_STATUS_COLOR = "#9bb7c9";
 
+// Disabled when the candidate has no uploaded resume; the span keeps the
+// tooltip working on a disabled button.
+function ViewResumeButton({ candidate }: Readonly<{ candidate: Candidate }>) {
+  const hasResume = Boolean(candidate.resumePath);
+  return (
+    <Tooltip title={hasResume ? "View resume" : "No resume on file"}>
+      <span>
+        <IconButton
+          component={Link}
+          href={`/hr/candidates/profile/${candidate.id}`}
+          disabled={!hasResume}
+          aria-label={`View resume for ${candidate.firstName} ${candidate.lastName}`}
+          sx={{ color: "#1f80b6" }}
+        >
+          <Visibility />
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+}
+
 type CandidateTableProps = {
   isMobile: boolean;
   isLoading: boolean;
@@ -217,16 +238,7 @@ export default function CandidateTable({
                       )}
 
                       <Stack direction="row" spacing={1} sx={{ pt: 0.5 }}>
-                        <Tooltip title="View resume">
-                          <IconButton
-                            component={Link}
-                            href={`/hr/candidates/profile/${candidate.id}`}
-                            aria-label={`View resume for ${candidate.firstName} ${candidate.lastName}`}
-                            sx={{ color: "#1f80b6" }}
-                          >
-                            <Visibility />
-                          </IconButton>
-                        </Tooltip>
+                        <ViewResumeButton candidate={candidate} />
 
                         {isEditing ? (
                           <FormControl
@@ -374,16 +386,7 @@ export default function CandidateTable({
                 return (
                   <TableRow key={candidate.id} hover>
                     <TableCell>
-                      <Tooltip title="View resume">
-                        <IconButton
-                          component={Link}
-                          href={`/hr/candidates/profile/${candidate.id}`}
-                          aria-label={`View resume for ${candidate.firstName} ${candidate.lastName}`}
-                          sx={{ color: "#1f80b6" }}
-                        >
-                          <Visibility />
-                        </IconButton>
-                      </Tooltip>
+                      <ViewResumeButton candidate={candidate} />
                     </TableCell>
                     <TableCell>
                       {formatScheduleForDisplay(

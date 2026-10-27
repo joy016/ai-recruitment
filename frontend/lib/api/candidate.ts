@@ -9,6 +9,7 @@ import {
 } from "@/app/(dashboard)/hr/candidates/(types)/candidates.types";
 import {
   CreateCandidatePayload,
+  ResumeUrlResponse,
   UpdateStatusPayload,
 } from "../types/candidate";
 import { ApiResponse } from "../types/common";
@@ -39,6 +40,16 @@ export const getNewCandidates = async (
 ): Promise<GetNewCandidatesResponse> => {
   return api.get<GetNewCandidatesResponse>(
     `${CANDIDATES_ENDPOINT}/getNewCandidates?pageNumber=${pageNumber}&pageSize=${pageSize}`,
+  );
+};
+
+// The backend resolves the candidate's own resumePath and signs it; the private
+// bucket is never accessed from the browser with credentials.
+export const getCandidateResumeUrl = async (
+  applicantId: string,
+): Promise<ResumeUrlResponse> => {
+  return api.get<ResumeUrlResponse>(
+    `${CANDIDATES_ENDPOINT}/${encodeURIComponent(applicantId)}/resume-url`,
   );
 };
 
