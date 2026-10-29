@@ -6,6 +6,7 @@ type ToggleSettingProps = {
   description: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
 };
 
 export default function ToggleSetting({
@@ -13,6 +14,7 @@ export default function ToggleSetting({
   description,
   checked,
   onChange,
+  disabled = false,
 }: Readonly<ToggleSettingProps>) {
   return (
     <SettingRow
@@ -21,6 +23,7 @@ export default function ToggleSetting({
       control={
         <Switch
           checked={checked}
+          disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
           slotProps={{ input: { "aria-label": title } }}
         />

@@ -3,6 +3,7 @@ import { AxiosResponse } from "axios";
 import { api, apiClient } from "@/lib/api-client";
 
 import BackendServer from "@/constant/server-address";
+import { withNotificationRefresh } from "@/lib/utils/notificationRefresh";
 import {
   InsertJobPayload,
   JobDetailsResponse,
@@ -26,9 +27,8 @@ export const getAllJobs = async (
 export const insertJob = (
   payload: InsertJobPayload,
 ): Promise<AxiosResponse<InsertJobResponse>> => {
-  return apiClient.post<InsertJobResponse>(
-    `${JOB_ENDPOINT}/insertJob`,
-    payload,
+  return withNotificationRefresh(
+    apiClient.post<InsertJobResponse>(`${JOB_ENDPOINT}/insertJob`, payload),
   );
 };
 
@@ -42,9 +42,8 @@ export const updateJobStatus = async (
   jobId: number,
   newStatus: string,
 ): Promise<AxiosResponse<void>> => {
-  return apiClient.put<void>(
-    `${JOB_ENDPOINT}/updateJobStatus/${jobId}`,
-    newStatus,
+  return withNotificationRefresh(
+    apiClient.put<void>(`${JOB_ENDPOINT}/updateJobStatus/${jobId}`, newStatus),
   );
 };
 
@@ -52,5 +51,7 @@ export const editJob = async (
   jobId: number,
   payload: EditJobPayload,
 ): Promise<AxiosResponse<void>> => {
-  return apiClient.put<void>(`${JOB_ENDPOINT}/editJob/${jobId}`, payload);
+  return withNotificationRefresh(
+    apiClient.put<void>(`${JOB_ENDPOINT}/editJob/${jobId}`, payload),
+  );
 };

@@ -13,6 +13,7 @@ import {
   UpdateStatusPayload,
 } from "../types/candidate";
 import { ApiResponse } from "../types/common";
+import { withNotificationRefresh } from "../utils/notificationRefresh";
 
 const CANDIDATES_ENDPOINT = `${BackendServer}/api/Candidates`;
 
@@ -69,17 +70,22 @@ export const createCandidate = async (
   formData.append("Role", payload.role ?? "");
   formData.append("JobId", payload.JobId.toString());
   formData.append("SourceOfApplication", payload.sourceOfApplication ?? "");
-  return api.post<Candidate, FormData>(CANDIDATES_ENDPOINT, formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  return withNotificationRefresh(
+    api.post<Candidate, FormData>(CANDIDATES_ENDPOINT, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  );
 };
 
 export const updateCandidateStatus = async (
   payload: UpdateStatusPayload,
 ): Promise<ApiResponse> => {
-  return api.put<ApiResponse, UpdateStatusPayload>(
-    `${CANDIDATES_ENDPOINT}/updateCandidateStatus`,
-    payload,
+  // Also covers scheduling/rescheduling interviews.
+  return withNotificationRefresh(
+    api.put<ApiResponse, UpdateStatusPayload>(
+      `${CANDIDATES_ENDPOINT}/updateCandidateStatus`,
+      payload,
+    ),
   );
 };
 

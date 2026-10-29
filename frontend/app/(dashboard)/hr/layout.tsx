@@ -9,6 +9,9 @@ import { useAppDispatch, useAppSelector } from "@/lib/store/hooks";
 import { clearUser } from "@/lib/store/features/userSlice";
 import SessionGuard from "@/app/component/SessionGuard";
 import PermissionsLoader from "@/app/component/PermissionsLoader";
+import NotificationPanel from "@/app/component/NotificationPanel";
+import { useUnreadNotificationCount } from "@/lib/hooks/useUnreadNotificationCount";
+import { NOTIFICATION_BADGE_MAX } from "@/constant/notifications";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { DASHBOARD_PERMISSIONS, PERMISSIONS } from "@/constant/permissions";
 import {
@@ -16,13 +19,11 @@ import {
   Avatar,
   Badge,
   Box,
-  Chip,
   CssBaseline,
   Divider,
   Drawer,
   IconButton,
   List,
-  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -34,8 +35,6 @@ import {
   useTheme,
 } from "@mui/material";
 import {
-  CheckCircle,
-  Close,
   Dashboard,
   Description,
   Group,
@@ -44,9 +43,7 @@ import {
   Menu,
   NotificationsNone,
   PersonOutlined,
-  Schedule,
   Settings,
-  WarningAmber,
 } from "@mui/icons-material";
 
 const drawerWidth = 260;
@@ -88,55 +85,6 @@ const navItems: NavItem[] = [
   { label: "Settings", href: "/hr/settings", icon: <Settings /> },
 ];
 
-type NotificationType = "success" | "warning" | "info";
-
-type RecruiterNotification = {
-  id: string;
-  title: string;
-  detail: string;
-  time: string;
-  type: NotificationType;
-  unread?: boolean;
-};
-
-const recruiterNotifications: RecruiterNotification[] = [
-  {
-    id: "n1",
-    title: "AI Screening Passed",
-    detail: "Sarah Jones passed AI screening for Frontend Developer.",
-    time: "5m ago",
-    type: "success",
-    unread: true,
-  },
-  {
-    id: "n2",
-    title: "Meeting Declined",
-    detail: "Mark Daniel declined the Initial Interview schedule.",
-    time: "32m ago",
-    type: "warning",
-    unread: true,
-  },
-  {
-    id: "n3",
-    title: "Interview Reminder",
-    detail: "Technical interview with APP-1001 starts in 2 hours.",
-    time: "1h ago",
-    type: "info",
-  },
-];
-
-const getNotificationAccent = (type: NotificationType) => {
-  if (type === "success") {
-    return { color: "#1c8758", bg: "#e8f7ef", icon: <CheckCircle /> };
-  }
-
-  if (type === "warning") {
-    return { color: "#b36a00", bg: "#fff3e3", icon: <WarningAmber /> };
-  }
-
-  return { color: "#1f80b6", bg: "#e8f4fb", icon: <Schedule /> };
-};
-
 export default function HrLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -159,9 +107,11 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   const closeAccountMenu = () => setAccountAnchorEl(null);
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
-  const unreadNotifications = recruiterNotifications.filter(
-    (item) => item.unread,
-  ).length;
+  const unreadNotifications = useUnreadNotificationCount(currentUser !== null);
+  const unreadLabel =
+    unreadNotifications.count > NOTIFICATION_BADGE_MAX
+      ? `${NOTIFICATION_BADGE_MAX}+`
+      : String(unreadNotifications.count);
 
   const drawerContent = (
     <Box
@@ -396,7 +346,11 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
             sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}
           >
             <IconButton
-              aria-label="Open notifications"
+              aria-label={
+                unreadNotifications.count > 0
+                  ? `Open notifications, ${unreadLabel} unread`
+                  : "Open notifications"
+              }
               onClick={() => setNotificationsOpen(true)}
               sx={{
                 color: "#1f80b6",
@@ -405,7 +359,12 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
                 "&:hover": { bgcolor: "#e2f1fb" },
               }}
             >
-              <Badge color="error" badgeContent={unreadNotifications}>
+              {/* MUI hides the badge at 0 and renders "99+" above max. */}
+              <Badge
+                color="error"
+                badgeContent={unreadNotifications.count}
+                max={NOTIFICATION_BADGE_MAX}
+              >
                 <NotificationsNone />
               </Badge>
             </IconButton>
@@ -535,114 +494,14 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
         {children}
       </Box>
 
-      <Drawer
-        anchor="right"
-        variant="temporary"
+      <NotificationPanel
         open={notificationsOpen}
         onClose={() => setNotificationsOpen(false)}
-        sx={{
-          "& .MuiDrawer-paper": {
-            width: { xs: "100%", sm: 390 },
-            borderLeft: "1px solid #d7e8f5",
-            bgcolor: "#f8fcff",
-          },
-        }}
-      >
-        <Box sx={{ p: 2.2 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: 1,
-            }}
-          >
-            <Typography variant="h6" sx={{ fontWeight: 700, color: "#17456a" }}>
-              Notifications
-            </Typography>
-            <IconButton
-              aria-label="Close notifications"
-              onClick={() => setNotificationsOpen(false)}
-              size="small"
-              sx={{ color: "#5f7f96", mt: -0.5, mr: -0.8 }}
-            >
-              <Close />
-            </IconButton>
-          </Box>
-          <Typography variant="body2" sx={{ color: "#5f7f96", mt: 0.4 }}>
-            Track screening outcomes, interview updates, and candidate actions.
-          </Typography>
-        </Box>
-        <Divider />
-
-        <List sx={{ px: 1.2, py: 1.2 }}>
-          {recruiterNotifications.map((item) => {
-            const accent = getNotificationAccent(item.type);
-
-            return (
-              <ListItem key={item.id} disableGutters sx={{ mb: 1 }}>
-                <Box
-                  sx={{
-                    width: "100%",
-                    p: 1.2,
-                    borderRadius: 2,
-                    border: "1px solid #dcecf8",
-                    bgcolor: "#ffffff",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        width: 30,
-                        height: 30,
-                        borderRadius: "50%",
-                        bgcolor: accent.bg,
-                        color: accent.color,
-                        display: "grid",
-                        placeItems: "center",
-                        "& .MuiSvgIcon-root": { fontSize: 18 },
-                      }}
-                    >
-                      {accent.icon}
-                    </Box>
-
-                    <Typography
-                      sx={{ fontWeight: 700, color: "#274d68", flex: 1 }}
-                    >
-                      {item.title}
-                    </Typography>
-
-                    {item.unread ? (
-                      <Chip
-                        label="New"
-                        size="small"
-                        sx={{
-                          bgcolor: "#e9f5ff",
-                          color: "#1f80b6",
-                          fontWeight: 700,
-                        }}
-                      />
-                    ) : null}
-                  </Box>
-
-                  <Typography
-                    variant="body2"
-                    sx={{ mt: 0.9, color: "#4f7189" }}
-                  >
-                    {item.detail}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    sx={{ mt: 0.7, color: "#7893a8", display: "block" }}
-                  >
-                    {item.time}
-                  </Typography>
-                </Box>
-              </ListItem>
-            );
-          })}
-        </List>
-      </Drawer>
+        unreadCount={unreadNotifications.count}
+        onItemRead={() => unreadNotifications.adjust(-1)}
+        onAllRead={unreadNotifications.reset}
+        onSyncUnreadCount={unreadNotifications.refresh}
+      />
     </Box>
   );
 }

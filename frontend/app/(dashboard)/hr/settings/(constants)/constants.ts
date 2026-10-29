@@ -1,5 +1,4 @@
 import {
-  NotificationSetting,
   PermissionGroupData,
   ThemePreference,
   UserPreferences,
@@ -29,46 +28,6 @@ export const DEPARTMENT_OPTIONS = [
   "IT",
   "Finance",
   "Operations",
-];
-
-export const MOCK_NOTIFICATION_SETTINGS: NotificationSetting[] = [
-  {
-    key: "newApplicant",
-    title: "New Applicant",
-    description: "Receive a notification when a new candidate applies.",
-    enabled: true,
-  },
-  {
-    key: "interviewScheduled",
-    title: "Interview Scheduled",
-    description: "Receive notifications when an interview is scheduled.",
-    enabled: true,
-  },
-  {
-    key: "interviewRescheduled",
-    title: "Interview Rescheduled",
-    description: "Receive notifications when an interview is changed.",
-    enabled: true,
-  },
-  {
-    key: "candidateStatusChanged",
-    title: "Candidate Status Changed",
-    description:
-      "Receive notifications when a candidate moves to another recruitment stage.",
-    enabled: true,
-  },
-  {
-    key: "jobPostUpdates",
-    title: "Job Post Updates",
-    description: "Receive notifications about job post changes.",
-    enabled: false,
-  },
-  {
-    key: "systemNotifications",
-    title: "System Notifications",
-    description: "Receive important system notifications.",
-    enabled: true,
-  },
 ];
 
 export const MOCK_PREFERENCES: UserPreferences = {

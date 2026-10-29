@@ -39,6 +39,47 @@ export const formatRelativeTime = (value: string): string => {
   return "just now";
 };
 
+// An ISO string with no "Z" or offset is parsed as *local* time by Date.
+const HAS_TIMEZONE = /(?:Z|[+-]\d{2}:?\d{2})$/i;
+
+/** Parses a UTC timestamp, treating one without a zone suffix as UTC. */
+export const parseUtcDate = (value: string): Date =>
+  new Date(HAS_TIMEZONE.test(value.trim()) ? value : `${value.trim()}Z`);
+
+const SHORT_RELATIVE_UNITS: { suffix: string; ms: number }[] = [
+  { suffix: "d", ms: 24 * 60 * 60 * 1000 },
+  { suffix: "h", ms: 60 * 60 * 1000 },
+  { suffix: "m", ms: 60 * 1000 },
+];
+
+/**
+ * Compact relative time from a UTC timestamp: "just now", "5m ago", "1h ago",
+ * "2d ago"; older than 30 days falls back to the date. `now` is injectable
+ * for tests.
+ */
+export const formatShortRelativeTime = (
+  value: string,
+  now: number = Date.now(),
+): string => {
+  const parsedDate = parseUtcDate(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  const diffMs = Math.max(now - parsedDate.getTime(), 0);
+  if (diffMs >= 30 * 24 * 60 * 60 * 1000) {
+    return dateOnlyFormatter.format(parsedDate);
+  }
+
+  for (const { suffix, ms } of SHORT_RELATIVE_UNITS) {
+    if (diffMs >= ms) {
+      return `${Math.floor(diffMs / ms)}${suffix} ago`;
+    }
+  }
+
+  return "just now";
+};
+
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",

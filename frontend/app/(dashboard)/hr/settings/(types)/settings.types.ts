@@ -20,13 +20,6 @@ export interface UserProfile {
   dateJoined: string;
 }
 
-export interface NotificationSetting {
-  key: string;
-  title: string;
-  description: string;
-  enabled: boolean;
-}
-
 export type ThemePreference = "Light" | "Dark" | "System";
 
 export interface UserPreferences {
