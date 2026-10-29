@@ -8,14 +8,23 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ai_recruitment.Tests.Features.Users
 {
     public class FakeSupabaseStorageService : ISupabaseStorageService
     {
+        public string ResumeBucket => "resume";
+        public int ResumeSignedUrlExpirationSeconds => 900;
+
         public Task<string> UploadAsync(string bucket, string path, Stream content, string contentType) =>
             Task.FromResult($"https://fake-storage.local/{bucket}/{path}");
+
+        public Task<string> CreateSignedUrlAsync(string bucket, string path, int expiresInSeconds) =>
+            Task.FromResult($"https://fake-storage.local/{bucket}/{path}?signed=1");
+
+        public Task DeleteAsync(string bucket, string path) => Task.CompletedTask;
     }
 
     public class UsersControllerInvitationTests
@@ -44,7 +53,9 @@ namespace ai_recruitment.Tests.Features.Users
         }
 
         private static UsersController CreateController(AppDbContext context, FakeInvitationWebhookService? webhook = null) =>
-            new(context, new FakeSupabaseStorageService(), new UserInvitationService(context, webhook ?? new FakeInvitationWebhookService(), new CommonPasswordChecker()));
+            new(context, new FakeSupabaseStorageService(),
+                new UserInvitationService(context, webhook ?? new FakeInvitationWebhookService(), new CommonPasswordChecker(), NullLogger<UserInvitationService>.Instance),
+                NullLogger<UsersController>.Instance);
 
         [Fact]
         public async Task InsertUser_CreatesPendingAccount_AndIssuesInvitation_WithoutAcceptingAPassword()

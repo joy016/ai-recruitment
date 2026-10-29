@@ -4,6 +4,7 @@ using ai_recruitment.Features.Users.Controller;
 using ai_recruitment.Features.Users.Dto;
 using ai_recruitment.Features.Users.Model;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -26,7 +27,8 @@ namespace ai_recruitment.Tests.Features.Users
 
         private static UsersController CreateController(AppDbContext context) =>
             new(context, new FakeSupabaseStorageService(),
-                new UserInvitationService(context, new FakeInvitationWebhookService(), new CommonPasswordChecker()));
+                new UserInvitationService(context, new FakeInvitationWebhookService(), new CommonPasswordChecker(), NullLogger<UserInvitationService>.Instance),
+                NullLogger<UsersController>.Instance);
 
         private static async Task<AppDbContext> SeedRoleAndUsersAsync()
         {

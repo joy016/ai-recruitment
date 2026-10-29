@@ -1,5 +1,7 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Model;
+using ai_recruitment.Features.Notifications;
+using ai_recruitment.Features.Notifications.Model;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
@@ -108,6 +110,7 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var webhookService = scope.ServiceProvider.GetRequiredService<IApplicantScreeningWebhookService>();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
             // Atomically claims the row (Pending -> Sending) before sending anything, so the
             // instant signal and the periodic sweep can never both deliver the same event -
@@ -149,6 +152,22 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
                     _logger.LogError(
                         "Giving up on applicant-screening event {OutboxId} for Candidate {CandidateId} after {Attempts} attempt(s). Last error: {Error}",
                         entry.Id, entry.CandidateId, entry.AttemptCount, error);
+
+                    // Critical: HR needs to know a candidate's screening never reached n8n,
+                    // regardless of whether they've turned off System notifications generally.
+                    await notificationService.NotifyAsync(
+                        NotificationType.SystemNotice,
+                        new NotificationContext
+                        {
+                            Severity = NotificationSeverity.Warning,
+                            Title = "Screening Delivery Failed",
+                            Message = "An applicant-screening event could not be delivered to n8n after repeated attempts and has been abandoned.",
+                            CandidateId = entry.CandidateId,
+                            JobId = entry.JobId,
+                        },
+                        $"system:outbox-failed:{entry.Id}",
+                        stoppingToken,
+                        critical: true);
                 }
                 else
                 {

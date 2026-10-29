@@ -3,6 +3,7 @@ using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.Departments.Model;
 using ai_recruitment.Features.JobPosts.Model;
+using ai_recruitment.Features.Notifications.Model;
 using ai_recruitment.Features.Permissions.Model;
 using ai_recruitment.Features.Roles.Model;
 using ai_recruitment.Features.Users.Model;
@@ -31,6 +32,8 @@ namespace ai_recruitment.Data
         public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
         public DbSet<ApplicantScreening> ApplicantScreenings => Set<ApplicantScreening>();
         public DbSet<ScreeningWebhookOutbox> ScreeningWebhookOutboxEntries => Set<ScreeningWebhookOutbox>();
+        public DbSet<Notification> Notifications => Set<Notification>();
+        public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -120,6 +123,61 @@ namespace ai_recruitment.Data
 
             modelBuilder.Entity<ScreeningWebhookOutbox>()
                 .HasIndex(o => new { o.Status, o.NextAttemptAt });
+
+            // One row per (recipient, event): retrying the same upstream event never creates
+            // a second notification for the same person.
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => new { n.RecipientUserId, n.DeduplicationKey })
+                .IsUnique();
+
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => new { n.RecipientUserId, n.IsRead, n.CreatedAt });
+
+            modelBuilder.Entity<Notification>()
+                .Property(n => n.Type)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<Notification>()
+                .Property(n => n.Category)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<Notification>()
+                .Property(n => n.Severity)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<Notification>()
+                .HasOne(n => n.Recipient)
+                .WithMany()
+                .HasForeignKey(n => n.RecipientUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Notification>()
+                .HasOne(n => n.Candidate)
+                .WithMany()
+                .HasForeignKey(n => n.CandidateId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Notification>()
+                .HasOne(n => n.Job)
+                .WithMany()
+                .HasForeignKey(n => n.JobId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // A missing row means "use the category default" - see NotificationCategoryMetadata -
+            // so there is deliberately no seed data here.
+            modelBuilder.Entity<NotificationPreference>()
+                .HasIndex(p => new { p.UserId, p.Category })
+                .IsUnique();
+
+            modelBuilder.Entity<NotificationPreference>()
+                .Property(p => p.Category)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<NotificationPreference>()
+                .HasOne(p => p.User)
+                .WithMany()
+                .HasForeignKey(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(

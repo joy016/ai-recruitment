@@ -4,6 +4,7 @@ using ai_recruitment.Features.Users.Dto;
 using ai_recruitment.Features.Users.Model;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace ai_recruitment.Tests.Features.Users
@@ -43,7 +44,7 @@ namespace ai_recruitment.Tests.Features.Users
         }
 
         private static UserInvitationService CreateService(AppDbContext context, FakeInvitationWebhookService? webhook = null) =>
-            new(context, webhook ?? new FakeInvitationWebhookService(), new CommonPasswordChecker());
+            new(context, webhook ?? new FakeInvitationWebhookService(), new CommonPasswordChecker(), NullLogger<UserInvitationService>.Instance);
 
         [Fact]
         public async Task IssueInvitationAsync_CreatesInvitation_AndPublishesWebhook_WhenDeliverySucceeds()

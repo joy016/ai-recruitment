@@ -3,6 +3,8 @@ using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates;
 using ai_recruitment.Features.Candidates.Dto;
+using ai_recruitment.Features.Notifications;
+using ai_recruitment.Features.Notifications.Model;
 using ai_recruitment.Service;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +38,7 @@ namespace ai_recruitment.Features.Candidates.controller
         private readonly ILogger<CandidatesController> _logger;
         private readonly IScreeningRequestPublisher _screeningRequestPublisher;
         private readonly ISupabaseStorageService _supabaseStorageService;
+        private readonly INotificationService _notificationService;
 
         public CandidatesController(
             AppDbContext context,
@@ -43,7 +46,8 @@ namespace ai_recruitment.Features.Candidates.controller
             IConfiguration configuration,
             ILogger<CandidatesController> logger,
             IScreeningRequestPublisher screeningRequestPublisher,
-            ISupabaseStorageService supabaseStorageService)
+            ISupabaseStorageService supabaseStorageService,
+            INotificationService notificationService)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
@@ -51,6 +55,7 @@ namespace ai_recruitment.Features.Candidates.controller
             _logger = logger;
             _screeningRequestPublisher = screeningRequestPublisher;
             _supabaseStorageService = supabaseStorageService;
+            _notificationService = notificationService;
         }
 
 
@@ -74,9 +79,14 @@ namespace ai_recruitment.Features.Candidates.controller
 
             // The screening webhook depends entirely on the referenced Job existing, so
             // this is validated up front instead of letting a bad JobId surface later as
-            // an FK violation on SaveChangesAsync.
-            var jobExists = await _context.Jobs.AnyAsync(j => j.JobId == dto.JobId);
-            if (!jobExists)
+            // an FK violation on SaveChangesAsync. The title doubles as the "new applicant"
+            // notification message content further down.
+            var jobTitle = await _context.Jobs
+                .Where(j => j.JobId == dto.JobId)
+                .Select(j => j.JobTitle)
+                .FirstOrDefaultAsync();
+
+            if (jobTitle == null)
             {
                 return BadRequest(new
                 {
@@ -185,6 +195,19 @@ namespace ai_recruitment.Features.Candidates.controller
 
 
             // Candidate now has its generated ID because SaveChangesAsync() has completed.
+
+            await _notificationService.NotifyAsync(
+                NotificationType.NewApplicant,
+                new NotificationContext
+                {
+                    Severity = NotificationSeverity.Info,
+                    Title = "New Applicant",
+                    Message = $"{candidate.FirstName} {candidate.LastName} applied for {jobTitle}.",
+                    CandidateId = candidate.Id,
+                    JobId = candidate.JobId,
+                },
+                $"applicant:{candidate.Id}",
+                HttpContext.RequestAborted);
 
             // Dynamic AI screening: writes a durable outbox row (see ScreeningWebhookOutbox)
             // keyed off candidate.JobId and signals the background dispatcher to deliver it.
@@ -460,6 +483,8 @@ namespace ai_recruitment.Features.Candidates.controller
                 return NotFound();
             }
 
+            var previousStatusId = candidate.ApplicantStatusId;
+
             // Supports partial updates: changing only the status, only the
             // interview schedule (e.g. correcting a date/time), or only
             // reassigning the interviewer - without requiring the others.
@@ -481,6 +506,27 @@ namespace ai_recruitment.Features.Candidates.controller
             candidate.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
+
+            if (dto.ApplicantStatusId.HasValue && dto.ApplicantStatusId.Value != previousStatusId)
+            {
+                var statusName = await _context.ApplicantStatuses
+                    .Where(s => s.StatusId == dto.ApplicantStatusId.Value)
+                    .Select(s => s.StatusName)
+                    .FirstOrDefaultAsync() ?? "a new stage";
+
+                await _notificationService.NotifyAsync(
+                    NotificationType.CandidateStatusChanged,
+                    new NotificationContext
+                    {
+                        Severity = NotificationSeverity.Info,
+                        Title = "Candidate Status Changed",
+                        Message = $"{candidate.FirstName} {candidate.LastName} moved to {statusName}.",
+                        CandidateId = candidate.Id,
+                        JobId = candidate.JobId,
+                    },
+                    $"status:{candidate.Id}:{dto.ApplicantStatusId.Value}",
+                    HttpContext.RequestAborted);
+            }
 
             return Ok(new
             {

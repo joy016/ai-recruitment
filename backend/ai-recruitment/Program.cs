@@ -1,6 +1,8 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
+using ai_recruitment.Features.Notifications;
+using ai_recruitment.Features.Notifications.Services;
 using ai_recruitment.Features.Roles;
 using ai_recruitment.Features.Users;
 using ai_recruitment.Features.Users.Services;
@@ -134,6 +136,21 @@ builder.Services.AddHttpClient<IApplicantScreeningWebhookService, N8nApplicantSc
 builder.Services.AddSingleton<ScreeningOutboxChannel>();
 builder.Services.AddScoped<IScreeningRequestPublisher, ScreeningRequestPublisher>();
 builder.Services.AddHostedService<ScreeningOutboxDispatcher>();
+
+// Notifications: panel/bell + per-category preferences (see Features/Notifications).
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IPreferenceService, PreferenceService>();
+builder.Services.AddOptions<NotificationRetentionOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        var retentionDays = configuration["Notifications:RetentionDays"];
+        if (int.TryParse(retentionDays, out var parsed))
+        {
+            options.RetentionDays = parsed;
+        }
+    });
+builder.Services.AddHostedService<InterviewReminderBackgroundService>();
+builder.Services.AddHostedService<NotificationCleanupService>();
 
 builder.Services.AddRateLimiter(options =>
 {

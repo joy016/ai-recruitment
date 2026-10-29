@@ -15,7 +15,7 @@ namespace ai_recruitment.Features.ApplicantScreening.Dto
 
         [Required]
         [RegularExpression(
-            "^(Completed|Failed|Incomplete)$",
+            "^(COMPLETED|MANUAL_REVIEW_REQUIRED|UNREADABLE_RESUME)$",
             ErrorMessage = "ScreeningStatus must be one of: Completed, Failed, Incomplete.")]
         public string ScreeningStatus { get; set; } = string.Empty;
 
