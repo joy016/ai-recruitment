@@ -32,6 +32,7 @@ namespace ai_recruitment.Data
         public DbSet<UserInvitation> UserInvitations => Set<UserInvitation>();
         public DbSet<ApplicantScreening> ApplicantScreenings => Set<ApplicantScreening>();
         public DbSet<ScreeningWebhookOutbox> ScreeningWebhookOutboxEntries => Set<ScreeningWebhookOutbox>();
+        public DbSet<CandidateStatusWebhookOutbox> CandidateStatusWebhookOutboxEntries => Set<CandidateStatusWebhookOutbox>();
         public DbSet<Notification> Notifications => Set<Notification>();
         public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
 
@@ -122,6 +123,9 @@ namespace ai_recruitment.Data
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<ScreeningWebhookOutbox>()
+                .HasIndex(o => new { o.Status, o.NextAttemptAt });
+
+            modelBuilder.Entity<CandidateStatusWebhookOutbox>()
                 .HasIndex(o => new { o.Status, o.NextAttemptAt });
 
             // One row per (recipient, event): retrying the same upstream event never creates

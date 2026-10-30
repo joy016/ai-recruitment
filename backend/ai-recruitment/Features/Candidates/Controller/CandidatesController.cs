@@ -3,6 +3,7 @@ using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates;
 using ai_recruitment.Features.Candidates.Dto;
+using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
 using ai_recruitment.Service;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.Logging;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.IO;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 
 namespace ai_recruitment.Features.Candidates.controller
@@ -39,6 +41,7 @@ namespace ai_recruitment.Features.Candidates.controller
         private readonly IScreeningRequestPublisher _screeningRequestPublisher;
         private readonly ISupabaseStorageService _supabaseStorageService;
         private readonly INotificationService _notificationService;
+        private readonly ICandidateStatusWebhookPublisher _candidateStatusWebhookPublisher;
 
         public CandidatesController(
             AppDbContext context,
@@ -47,7 +50,8 @@ namespace ai_recruitment.Features.Candidates.controller
             ILogger<CandidatesController> logger,
             IScreeningRequestPublisher screeningRequestPublisher,
             ISupabaseStorageService supabaseStorageService,
-            INotificationService notificationService)
+            INotificationService notificationService,
+            ICandidateStatusWebhookPublisher candidateStatusWebhookPublisher)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
@@ -56,6 +60,7 @@ namespace ai_recruitment.Features.Candidates.controller
             _screeningRequestPublisher = screeningRequestPublisher;
             _supabaseStorageService = supabaseStorageService;
             _notificationService = notificationService;
+            _candidateStatusWebhookPublisher = candidateStatusWebhookPublisher;
         }
 
 
@@ -526,6 +531,29 @@ namespace ai_recruitment.Features.Candidates.controller
                     },
                     $"status:{candidate.Id}:{dto.ApplicantStatusId.Value}",
                     HttpContext.RequestAborted);
+
+                // Candidate status-change emails (interview/offer/onboarding/rejection) via
+                // n8n - only for the specific statuses CandidateStatusNotifications knows
+                // about (the "a new stage" fallback above never matches that set). Enqueues
+                // a durable outbox row and returns immediately; delivery happens on a
+                // background dispatcher so a down/slow n8n can never delay or fail this
+                // response.
+                if (CandidateStatusNotifications.TryGetEmailType(statusName, out _))
+                {
+                    var previousStatusName = await _context.ApplicantStatuses
+                        .Where(s => s.StatusId == previousStatusId)
+                        .Select(s => s.StatusName)
+                        .FirstOrDefaultAsync();
+
+                    var changedBy = User.FindFirstValue(ClaimTypes.Name);
+
+                    await _candidateStatusWebhookPublisher.PublishAsync(
+                        candidate,
+                        previousStatusName,
+                        statusName,
+                        changedBy,
+                        HttpContext.RequestAborted);
+                }
             }
 
             return Ok(new

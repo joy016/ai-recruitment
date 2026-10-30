@@ -1,6 +1,7 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
+using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Services;
 using ai_recruitment.Features.Roles;
@@ -136,6 +137,38 @@ builder.Services.AddHttpClient<IApplicantScreeningWebhookService, N8nApplicantSc
 builder.Services.AddSingleton<ScreeningOutboxChannel>();
 builder.Services.AddScoped<IScreeningRequestPublisher, ScreeningRequestPublisher>();
 builder.Services.AddHostedService<ScreeningOutboxDispatcher>();
+
+// Candidate status-change emails (interview/offer/onboarding/rejection): HR changing a
+// candidate's status -> n8n "candidate-status-changed" webhook, delivered durably via an
+// outbox table + background dispatcher so a down/slow n8n never delays or fails the
+// status-update request itself.
+builder.Services.AddOptions<N8nCandidateStatusOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.WebhookUrl = configuration[N8nCandidateStatusOptions.EnvWebhookUrl]
+            ?? configuration["N8n:CandidateStatusWebhookUrl"];
+
+        options.WebhookSecret = configuration[N8nCandidateStatusOptions.EnvWebhookSecret]
+            ?? configuration["N8n:CandidateStatusWebhookSecret"];
+
+        var enabled = configuration["N8n:CandidateStatusWebhookEnabled"];
+        if (bool.TryParse(enabled, out var parsedEnabled))
+        {
+            options.Enabled = parsedEnabled;
+        }
+
+        options.AllowInsecureHttp = builder.Environment.IsDevelopment();
+    });
+
+builder.Services.AddHttpClient<IN8nCandidateStatusWebhookService, N8nCandidateStatusWebhookService>((provider, client) =>
+{
+    var options = provider.GetRequiredService<IOptions<N8nCandidateStatusOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
+
+builder.Services.AddSingleton<CandidateStatusOutboxChannel>();
+builder.Services.AddScoped<ICandidateStatusWebhookPublisher, CandidateStatusWebhookPublisher>();
+builder.Services.AddHostedService<CandidateStatusOutboxDispatcher>();
 
 // Notifications: panel/bell + per-category preferences (see Features/Notifications).
 builder.Services.AddScoped<INotificationService, NotificationService>();
