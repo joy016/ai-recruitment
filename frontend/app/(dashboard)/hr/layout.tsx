@@ -14,6 +14,8 @@ import { useUnreadNotificationCount } from "@/lib/hooks/useUnreadNotificationCou
 import { NOTIFICATION_BADGE_MAX } from "@/constant/notifications";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { DASHBOARD_PERMISSIONS, PERMISSIONS } from "@/constant/permissions";
+import InboxPreviewMenu from "@/app/component/InboxPreviewMenu";
+import { MOCK_UNREAD_INBOX_COUNT } from "./inbox/(constants)/mockInbox";
 import {
   AppBar,
   Avatar,
@@ -38,6 +40,7 @@ import {
   Dashboard,
   Description,
   Group,
+  InboxOutlined,
   Logout,
   ManageAccounts,
   Menu,
@@ -54,6 +57,8 @@ type NavItem = {
   icon: React.ReactElement;
   /** Shown when the user has any of these; omitted = available to every user. */
   requiredAny?: readonly string[];
+  /** Unread count pill; hidden at 0. */
+  badge?: number;
 };
 
 const navItems: NavItem[] = [
@@ -68,6 +73,14 @@ const navItems: NavItem[] = [
     href: "/hr/candidates",
     icon: <Group />,
     requiredAny: [PERMISSIONS.candidates.view],
+  },
+  {
+    label: "Inbox",
+    href: "/hr/inbox",
+    icon: <InboxOutlined />,
+    requiredAny: [PERMISSIONS.candidates.view],
+    // TODO(wire-up): live unread count from the mail API.
+    badge: MOCK_UNREAD_INBOX_COUNT,
   },
   {
     label: "Job Posts",
@@ -250,6 +263,26 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
             >
               <ListItemIcon>{item.icon}</ListItemIcon>
               <ListItemText primary={item.label} />
+              {item.badge ? (
+                <Box
+                  component="span"
+                  sx={{
+                    minWidth: 22,
+                    height: 20,
+                    px: 0.8,
+                    borderRadius: 999,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "0.72rem",
+                    fontWeight: 700,
+                    color: "#0f3a5c",
+                    bgcolor: "#ffffff",
+                  }}
+                >
+                  {item.badge > 99 ? "99+" : item.badge}
+                </Box>
+              ) : null}
             </ListItemButton>
           );
         })}
@@ -345,6 +378,7 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
           <Box
             sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}
           >
+            <InboxPreviewMenu />
             <IconButton
               aria-label={
                 unreadNotifications.count > 0
