@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   Box,
@@ -24,10 +25,17 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { Cancel, Edit, Save, Visibility } from "@mui/icons-material";
+import {
+  AutoAwesome,
+  Cancel,
+  Edit,
+  Save,
+  Visibility,
+} from "@mui/icons-material";
 import { COLUMN_NAMES } from "../(constants)/constants";
 import { Candidate } from "../(types)/candidates.types";
 import { ApplicantStatusItem } from "@/lib/api/applicant-status";
+import AiScreeningResultModal from "./AiScreeningResultModal";
 
 const TABLE_HEIGHT = { xs: "62vh", md: "68vh" };
 const DEFAULT_STATUS_COLOR = "#9bb7c9";
@@ -49,6 +57,27 @@ function ViewResumeButton({ candidate }: Readonly<{ candidate: Candidate }>) {
           <Visibility />
         </IconButton>
       </span>
+    </Tooltip>
+  );
+}
+
+function AiScreeningButton({
+  candidate,
+  onOpen,
+}: Readonly<{ candidate: Candidate; onOpen: (candidate: Candidate) => void }>) {
+  return (
+    <Tooltip title="View AI screening result">
+      <IconButton
+        aria-label={`View AI screening result for ${candidate.firstName} ${candidate.lastName}`}
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen(candidate);
+        }}
+        sx={{ color: "#1f80b6" }}
+      >
+        <AutoAwesome />
+      </IconButton>
     </Tooltip>
   );
 }
@@ -111,6 +140,28 @@ export default function CandidateTable({
   onPageSizeChange,
 }: Readonly<CandidateTableProps>) {
   const theme = useTheme();
+  // Kept after closing so the dialog's exit transition still has content.
+  const [screeningCandidate, setScreeningCandidate] =
+    useState<Candidate | null>(null);
+  const [isScreeningOpen, setIsScreeningOpen] = useState(false);
+
+  const openScreening = (candidate: Candidate) => {
+    setScreeningCandidate(candidate);
+    setIsScreeningOpen(true);
+  };
+
+  const screeningModal = (
+    <AiScreeningResultModal
+      open={isScreeningOpen}
+      onClose={() => setIsScreeningOpen(false)}
+      candidateId={screeningCandidate?.id ?? null}
+      candidateName={
+        screeningCandidate
+          ? `${screeningCandidate.firstName} ${screeningCandidate.lastName}`
+          : ""
+      }
+    />
+  );
 
   const getStatusById = (statusId: number) =>
     applicantStatuses.find((status) => status.statusId === statusId);
@@ -239,6 +290,10 @@ export default function CandidateTable({
 
                       <Stack direction="row" spacing={1} sx={{ pt: 0.5 }}>
                         <ViewResumeButton candidate={candidate} />
+                        <AiScreeningButton
+                          candidate={candidate}
+                          onOpen={openScreening}
+                        />
 
                         {isEditing ? (
                           <FormControl
@@ -319,6 +374,7 @@ export default function CandidateTable({
           )}
         </Box>
         {pagination}
+        {screeningModal}
       </>
     );
   }
@@ -386,7 +442,13 @@ export default function CandidateTable({
                 return (
                   <TableRow key={candidate.id} hover>
                     <TableCell>
-                      <ViewResumeButton candidate={candidate} />
+                      <Stack direction="row" spacing={0.6}>
+                        <ViewResumeButton candidate={candidate} />
+                        <AiScreeningButton
+                          candidate={candidate}
+                          onOpen={openScreening}
+                        />
+                      </Stack>
                     </TableCell>
                     <TableCell>
                       {formatScheduleForDisplay(
@@ -489,6 +551,7 @@ export default function CandidateTable({
         </Table>
       </TableContainer>
       {pagination}
+      {screeningModal}
     </>
   );
 }

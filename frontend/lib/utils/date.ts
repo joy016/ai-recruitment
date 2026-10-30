@@ -80,6 +80,28 @@ export const formatShortRelativeTime = (
   return "just now";
 };
 
+/**
+ * Formats a UTC timestamp in local time like the candidates table:
+ * "10/28/2026, 9:26 pm". Falls back to the raw value if it can't be parsed.
+ */
+export const formatNumericDateTime = (value: string): string => {
+  const parsedDate = parseUtcDate(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  const datePart = parsedDate.toLocaleDateString("en-US");
+  const timePart = parsedDate
+    .toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .toLowerCase();
+
+  return `${datePart}, ${timePart}`;
+};
+
 const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",
