@@ -22,8 +22,10 @@ import CardContainer from "@/app/component/CardContainer";
 import OpenJobs from "./(components)/OpenJobs";
 import NewApplicants from "./(components)/NewApplicants";
 import InterviewsToday from "./(components)/InterviewsToday";
+import AnalyticsChartFrame from "./(components)/AnalyticsChartFrame";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { PERMISSIONS } from "@/constant/permissions";
+import { useDashboardAnalytics } from "@/lib/hooks/useDashboardAnalytics";
 
 // Fixed-order categorical palette (identity color), validated for CVD-safe
 // adjacency - see the dataviz color-formula: never cycle or reorder per chart.
@@ -33,41 +35,6 @@ const CATEGORICAL_COLORS = [
   "#1baf7a", // aqua
   "#eda100", // yellow
   "#e87ba4", // magenta
-];
-
-const applicantsBySourceData = [
-  { id: 0, label: "LinkedIn", value: 38 },
-  { id: 1, label: "Referral", value: 22 },
-  { id: 2, label: "Company Website", value: 18 },
-  { id: 3, label: "JobStreet", value: 14 },
-  { id: 4, label: "Other", value: 8 },
-];
-
-const applicantsByStatusData = [
-  { id: 0, label: "Technical Interview", value: 20 },
-  { id: 1, label: "Final Interview", value: 11 },
-  { id: 2, label: "Job Offer", value: 8 },
-  { id: 3, label: "Hired", value: 14 },
-  { id: 4, label: "Rejected", value: 25 },
-];
-
-const applicantsByJobData = [
-  { job: "Frontend Developer", applicants: 24 },
-  { job: "Backend Developer", applicants: 19 },
-  { job: "QA Engineer", applicants: 15 },
-  { job: "UI/UX Designer", applicants: 12 },
-  { job: "Product Analyst", applicants: 9 },
-  { job: "HR Associate", applicants: 6 },
-];
-
-const weeklyApplicationsTrend = [
-  { day: "Mon", applications: 12 },
-  { day: "Tue", applications: 18 },
-  { day: "Wed", applications: 9 },
-  { day: "Thu", applications: 22 },
-  { day: "Fri", applications: 17 },
-  { day: "Sat", applications: 7 },
-  { day: "Sun", applications: 4 },
 ];
 
 const interviewSchedule = [
@@ -154,6 +121,39 @@ export default function HrDashboardPage() {
   const [totalJobCount, setTotalJobCount] = useState(0);
   const [newApplicantCount, setNewApplicantCount] = useState(0);
   const [interviewsTodayCount, setInterviewsTodayCount] = useState(0);
+
+  const {
+    data: analytics,
+    isLoading: isAnalyticsLoading,
+    isError: isAnalyticsError,
+    refetch: refetchAnalytics,
+  } = useDashboardAnalytics();
+
+  // Fixed order from the backend (always LinkedIn, Referral, Company Website, JobStreet,
+  // Other) mapped 1:1 onto CATEGORICAL_COLORS by index, so a source keeps its color even at
+  // a 0 count or when other counts change.
+  const applicantsBySourceData = (analytics?.applicantsBySource ?? []).map(
+    (item, index) => ({ id: index, label: item.label, value: item.count }),
+  );
+  const applicantsByStatusData = (analytics?.applicantsByStatus ?? []).map(
+    (item, index) => ({ id: index, label: item.status, value: item.count }),
+  );
+  const applicantsByJobData = (analytics?.applicantsByJob ?? []).map((item) => ({
+    job: item.jobTitle,
+    applicants: item.count,
+  }));
+  const weeklyApplicationsTrend = (analytics?.weeklyApplicationVolume ?? []).map(
+    (item) => ({ day: item.day, applications: item.count }),
+  );
+
+  const isSourceEmpty = applicantsBySourceData.every((item) => item.value === 0);
+  const isStatusEmpty =
+    applicantsByStatusData.length === 0 ||
+    applicantsByStatusData.every((item) => item.value === 0);
+  const isJobEmpty = applicantsByJobData.length === 0;
+  const isWeeklyEmpty = weeklyApplicationsTrend.every(
+    (item) => item.applications === 0,
+  );
 
   const statCards = useMemo(
     () => [
@@ -322,123 +322,135 @@ export default function HrDashboardPage() {
           </Typography>
           <Typography variant="body2" sx={{ mt: 0.5, color: "#5f8199" }}>
             Applicant sourcing, hiring demand by role, and weekly application
-            volume. (Sample data)
+            volume.
           </Typography>
         </Box>
 
         <Grid container spacing={2.2} sx={{ p: { xs: 1.5, sm: 2.5 } }}>
           <Grid size={{ xs: 12, md: 5 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
-            >
-              Applicants by Source
-            </Typography>
-            <PieChart
-              series={[
-                {
-                  data: applicantsBySourceData,
-                  innerRadius: "42%",
-                  outerRadius: "80%",
-                  paddingAngle: 2,
-                  cornerRadius: 3,
-                  arcLabel: "value",
-                  arcLabelMinAngle: 20,
-                },
-              ]}
-              colors={CATEGORICAL_COLORS}
+            <AnalyticsChartFrame
+              title="Applicants by Source"
               height={pieChartHeight}
-              slotProps={pieLegendSlotProps}
-              sx={{
-                "& .MuiChartsArcLabel-root": {
-                  fill: "#ffffff",
-                  fontWeight: 700,
-                  fontSize: 12,
-                },
-              }}
-            />
+              isLoading={isAnalyticsLoading}
+              isError={isAnalyticsError}
+              isEmpty={isSourceEmpty}
+              onRetry={refetchAnalytics}
+            >
+              <PieChart
+                series={[
+                  {
+                    data: applicantsBySourceData,
+                    innerRadius: "42%",
+                    outerRadius: "80%",
+                    paddingAngle: 2,
+                    cornerRadius: 3,
+                    arcLabel: "value",
+                    arcLabelMinAngle: 20,
+                  },
+                ]}
+                colors={CATEGORICAL_COLORS}
+                height={pieChartHeight}
+                slotProps={pieLegendSlotProps}
+                sx={{
+                  "& .MuiChartsArcLabel-root": {
+                    fill: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 12,
+                  },
+                }}
+              />
+            </AnalyticsChartFrame>
           </Grid>
 
           <Grid size={{ xs: 12, md: 7 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
-            >
-              Applicants by Job
-            </Typography>
-            <BarChart
-              dataset={applicantsByJobData}
-              layout="horizontal"
-              yAxis={[
-                {
-                  dataKey: "job",
-                  scaleType: "band",
-                  width: "auto",
-                  tickLabelStyle: { fontSize: 11 },
-                },
-              ]}
-              series={[{ dataKey: "applicants", color: CATEGORICAL_COLORS[0] }]}
+            <AnalyticsChartFrame
+              title="Applicants by Job"
               height={260}
-              borderRadius={4}
-              grid={{ vertical: true }}
-              hideLegend
-            />
+              isLoading={isAnalyticsLoading}
+              isError={isAnalyticsError}
+              isEmpty={isJobEmpty}
+              onRetry={refetchAnalytics}
+            >
+              <BarChart
+                dataset={applicantsByJobData}
+                layout="horizontal"
+                yAxis={[
+                  {
+                    dataKey: "job",
+                    scaleType: "band",
+                    width: "auto",
+                    tickLabelStyle: { fontSize: 11 },
+                  },
+                ]}
+                series={[{ dataKey: "applicants", color: CATEGORICAL_COLORS[0] }]}
+                height={260}
+                borderRadius={4}
+                grid={{ vertical: true }}
+                hideLegend
+              />
+            </AnalyticsChartFrame>
           </Grid>
 
           <Grid size={{ xs: 12, md: 5 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
-            >
-              Applicants by Status
-            </Typography>
-            <PieChart
-              series={[
-                {
-                  data: applicantsByStatusData,
-                  innerRadius: "42%",
-                  outerRadius: "80%",
-                  paddingAngle: 2,
-                  cornerRadius: 3,
-                  arcLabel: "value",
-                  arcLabelMinAngle: 20,
-                },
-              ]}
-              colors={CATEGORICAL_COLORS}
+            <AnalyticsChartFrame
+              title="Applicants by Status"
               height={pieChartHeight}
-              slotProps={pieLegendSlotProps}
-              sx={{
-                "& .MuiChartsArcLabel-root": {
-                  fill: "#ffffff",
-                  fontWeight: 700,
-                  fontSize: 12,
-                },
-              }}
-            />
+              isLoading={isAnalyticsLoading}
+              isError={isAnalyticsError}
+              isEmpty={isStatusEmpty}
+              onRetry={refetchAnalytics}
+            >
+              <PieChart
+                series={[
+                  {
+                    data: applicantsByStatusData,
+                    innerRadius: "42%",
+                    outerRadius: "80%",
+                    paddingAngle: 2,
+                    cornerRadius: 3,
+                    arcLabel: "value",
+                    arcLabelMinAngle: 20,
+                  },
+                ]}
+                colors={CATEGORICAL_COLORS}
+                height={pieChartHeight}
+                slotProps={pieLegendSlotProps}
+                sx={{
+                  "& .MuiChartsArcLabel-root": {
+                    fill: "#ffffff",
+                    fontWeight: 700,
+                    fontSize: 12,
+                  },
+                }}
+              />
+            </AnalyticsChartFrame>
           </Grid>
 
           <Grid size={{ xs: 12, md: 7 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 700, color: "#264a66", mb: 1 }}
-            >
-              Weekly Application Volume
-            </Typography>
-            <LineChart
-              dataset={weeklyApplicationsTrend}
-              xAxis={[{ dataKey: "day", scaleType: "point" }]}
-              series={[
-                {
-                  dataKey: "applications",
-                  color: CATEGORICAL_COLORS[0],
-                  area: true,
-                  showMark: true,
-                },
-              ]}
+            <AnalyticsChartFrame
+              title="Weekly Application Volume"
               height={220}
-              grid={{ horizontal: true }}
-              hideLegend
-            />
+              isLoading={isAnalyticsLoading}
+              isError={isAnalyticsError}
+              isEmpty={isWeeklyEmpty}
+              onRetry={refetchAnalytics}
+            >
+              <LineChart
+                dataset={weeklyApplicationsTrend}
+                xAxis={[{ dataKey: "day", scaleType: "point" }]}
+                series={[
+                  {
+                    dataKey: "applications",
+                    color: CATEGORICAL_COLORS[0],
+                    area: true,
+                    showMark: true,
+                  },
+                ]}
+                height={220}
+                grid={{ horizontal: true }}
+                hideLegend
+              />
+            </AnalyticsChartFrame>
           </Grid>
         </Grid>
       </CardContainer>
