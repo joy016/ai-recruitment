@@ -7,22 +7,26 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  Skeleton,
   Stack,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { Edit } from "@mui/icons-material";
+import type { InboxCounts } from "@/lib/types/inbox";
 import {
   FOLDERS,
   INBOX_COLORS,
   LABELS,
   LABEL_IDS,
 } from "../(constants)/inbox.constants";
-import type { FolderId, InboxThread, LabelId } from "../(types)/inbox.types";
-import { getFolderCount } from "../(utils)/inbox.utils";
+import type { FolderId, LabelId } from "../(types)/inbox.types";
 
 type FolderListProps = {
-  threads: InboxThread[];
+  counts: InboxCounts | undefined;
+  isCountsLoading: boolean;
+  /** False without inbox.send: Compose is disabled. */
+  canCompose: boolean;
   activeFolder: FolderId;
   activeLabel: LabelId | null;
   onSelectFolder: (folder: FolderId) => void;
@@ -49,7 +53,9 @@ const itemSx = {
 } as const;
 
 export default function FolderList({
-  threads,
+  counts,
+  isCountsLoading,
+  canCompose,
   activeFolder,
   activeLabel,
   onSelectFolder,
@@ -57,6 +63,11 @@ export default function FolderList({
   onCompose,
   variant = "full",
 }: Readonly<FolderListProps>) {
+  // Inbox shows unread; the rest show totals.
+  const getFolderCount = (id: FolderId) => counts?.folders[id] ?? 0;
+  const getLabelCount = (id: LabelId) => counts?.labels[id] ?? 0;
+  const countSkeleton = <Skeleton width={16} aria-hidden="true" />;
+
   if (variant === "rail") {
     return (
       <Stack
@@ -69,6 +80,7 @@ export default function FolderList({
           <IconButton
             aria-label="Compose new message"
             onClick={onCompose}
+            disabled={!canCompose}
             sx={{
               mb: 1,
               width: 44,
@@ -85,10 +97,10 @@ export default function FolderList({
         </Tooltip>
 
         {FOLDERS.map(({ id, label, icon: Icon }) => {
-          const count = getFolderCount(threads, id);
+          const count = getFolderCount(id);
           const selected = !activeLabel && activeFolder === id;
           return (
-            <Tooltip key={id} title={`${label} (${count})`} placement="right">
+            <Tooltip key={id} title={isCountsLoading ? label : `${label} (${count})`} placement="right">
               <IconButton
                 aria-label={`${label}, ${count}`}
                 aria-current={selected ? "page" : undefined}
@@ -116,7 +128,7 @@ export default function FolderList({
         <Box sx={{ width: 28, borderTop: `1px solid ${INBOX_COLORS.divider}`, my: 1 }} />
 
         {LABEL_IDS.map((id) => (
-          <Tooltip key={id} title={LABELS[id].label} placement="right">
+          <Tooltip key={id} title={`${LABELS[id].label} (${getLabelCount(id)})`} placement="right">
             <IconButton
               aria-label={`Label: ${LABELS[id].label}`}
               aria-current={activeLabel === id ? "page" : undefined}
@@ -145,6 +157,7 @@ export default function FolderList({
         variant="contained"
         startIcon={<Edit />}
         onClick={onCompose}
+        disabled={!canCompose}
         sx={{
           mb: 2,
           py: 1.1,
@@ -162,7 +175,7 @@ export default function FolderList({
 
       <List disablePadding>
         {FOLDERS.map(({ id, label, icon: Icon }) => {
-          const count = getFolderCount(threads, id);
+          const count = getFolderCount(id);
           const selected = !activeLabel && activeFolder === id;
           return (
             <ListItemButton
@@ -179,7 +192,8 @@ export default function FolderList({
                 primary={label}
                 slotProps={{ primary: { sx: { fontSize: "0.9rem" } } }}
               />
-              {count > 0 && (
+              {isCountsLoading && countSkeleton}
+              {!isCountsLoading && count > 0 && (
                 <Typography
                   variant="caption"
                   sx={{
@@ -227,6 +241,12 @@ export default function FolderList({
               primary={LABELS[id].label}
               slotProps={{ primary: { sx: { fontSize: "0.9rem" } } }}
             />
+            {isCountsLoading && countSkeleton}
+            {!isCountsLoading && getLabelCount(id) > 0 && (
+              <Typography variant="caption" sx={{ color: INBOX_COLORS.muted }}>
+                {getLabelCount(id)}
+              </Typography>
+            )}
           </ListItemButton>
         ))}
       </List>

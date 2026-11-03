@@ -1,69 +1,41 @@
-export type FolderId =
-  | "inbox"
-  | "sent"
-  | "drafts"
-  | "starred"
-  | "archived"
-  | "trash";
+import type {
+  InboxAttachment,
+  InboxFilter,
+  InboxFolder,
+  InboxLabel,
+  InboxSort,
+  SendMode,
+} from "@/lib/types/inbox";
 
-export type LabelId = "applicants" | "interviews" | "offers" | "rejections";
+// API DTOs live in lib/types/inbox.ts; these are the UI's names for them.
+export type FolderId = InboxFolder;
+export type LabelId = InboxLabel;
+export type MessageFilter = InboxFilter;
+export type MessageSort = InboxSort;
 
-export type MessageFilter = "all" | "unread" | "attachments" | "candidates";
-
-export type MessageSort = "newest" | "oldest" | "sender" | "unread";
-
-export interface Contact {
-  name: string;
-  email: string;
-}
-
-export interface Attachment {
-  id: string;
-  fileName: string;
-  /** Display size, e.g. "248 KB". */
-  size: string;
-  kind: "pdf" | "doc" | "image" | "other";
-}
-
-export interface InboxMessage {
-  id: string;
-  from: Contact;
-  to: Contact[];
-  cc?: Contact[];
-  /** ISO timestamp (UTC). */
-  sentAt: string;
-  /** Plain text; blank lines separate paragraphs. */
-  body: string;
-  attachments: Attachment[];
-}
-
-/** A conversation; `messages` is oldest first. */
-export interface InboxThread {
-  id: string;
-  subject: string;
-  /** Real folder. "starred" is a view over every folder, not a location. */
-  folder: Exclude<FolderId, "starred">;
-  labels: LabelId[];
-  isStarred: boolean;
-  isUnread: boolean;
-  messages: InboxMessage[];
-}
-
-export interface MockCandidate {
-  id: string;
-  name: string;
-  email: string;
-  jobTitle: string;
-  yearsOfExperience: number;
-  status: string;
-  /** ISO timestamp; null when nothing is scheduled. */
-  interviewSchedule: string | null;
-}
-
+/** What the composer edits. `body` is plain text, sent as simple HTML. */
 export interface ComposeDraft {
   to: string[];
   cc: string[];
   bcc: string[];
   subject: string;
   body: string;
+  /** Already uploaded (e.g. from a saved draft). */
+  attachments: InboxAttachment[];
+}
+
+/** Everything needed to open the composer. */
+export interface ComposeInit {
+  title: string;
+  mode: SendMode;
+  draft: ComposeDraft;
+  replyToMessageId?: string;
+  /** Set when reopening a saved draft. */
+  draftId?: string;
+  threadId?: string;
+}
+
+export interface KnownRecipient {
+  email: string;
+  name: string;
 }

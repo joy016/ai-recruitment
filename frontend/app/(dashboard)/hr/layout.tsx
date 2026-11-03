@@ -14,8 +14,10 @@ import { useUnreadNotificationCount } from "@/lib/hooks/useUnreadNotificationCou
 import { NOTIFICATION_BADGE_MAX } from "@/constant/notifications";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { DASHBOARD_PERMISSIONS, PERMISSIONS } from "@/constant/permissions";
-import InboxPreviewMenu from "@/app/component/InboxPreviewMenu";
-import { MOCK_UNREAD_INBOX_COUNT } from "./inbox/(constants)/mockInbox";
+// import InboxPreviewMenu from "@/app/component/InboxPreviewMenu";
+import InboxEventsProvider from "@/app/component/InboxEventsProvider";
+import { useInboxCounts } from "@/lib/hooks/useInbox";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   AppBar,
   Avatar,
@@ -74,14 +76,12 @@ const navItems: NavItem[] = [
     icon: <Group />,
     requiredAny: [PERMISSIONS.candidates.view],
   },
-  {
-    label: "Inbox",
-    href: "/hr/inbox",
-    icon: <InboxOutlined />,
-    requiredAny: [PERMISSIONS.candidates.view],
-    // TODO(wire-up): live unread count from the mail API.
-    badge: MOCK_UNREAD_INBOX_COUNT,
-  },
+  // {
+  //   label: "Inbox",
+  //   href: "/hr/inbox",
+  //   icon: <InboxOutlined />,
+  //   requiredAny: [PERMISSIONS.inbox.view],
+  // },
   {
     label: "Job Posts",
     href: "/hr/jobs",
@@ -103,11 +103,18 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((state) => state.user.currentUser);
-  const { hasAnyPermission } = usePermissions();
+  const queryClient = useQueryClient();
+  const { hasAnyPermission, hasPermission } = usePermissions();
+  const canViewInbox =
+    currentUser !== null && hasPermission(PERMISSIONS.inbox.view);
+  // Same cached counts as the Inbox folder pane and the header mail icon.
+  const inboxUnread = useInboxCounts(canViewInbox).data?.totalUnread ?? 0;
   // Gated items stay hidden until permissions load (deny by default).
-  const visibleNavItems = navItems.filter(
-    (item) => !item.requiredAny || hasAnyPermission(item.requiredAny),
-  );
+  const visibleNavItems = navItems
+    .filter((item) => !item.requiredAny || hasAnyPermission(item.requiredAny))
+    .map((item) =>
+      item.href === "/hr/inbox" ? { ...item, badge: inboxUnread } : item,
+    );
   const userInitials = currentUser
     ? `${currentUser.firstName.charAt(0)}${currentUser.lastName.charAt(0)}`.toUpperCase()
     : "HR";
@@ -335,207 +342,214 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f2f9ff" }}>
-      <CssBaseline />
-      <SessionGuard />
-      <PermissionsLoader />
-      <AppBar
-        position="fixed"
-        elevation={0}
-        sx={{
-          width: { md: `calc(100% - ${drawerWidth}px)` },
-          ml: { md: `${drawerWidth}px` },
-          bgcolor: "#ffffffd9",
-          backdropFilter: "blur(6px)",
-          color: "#264a66",
-          borderBottom: "1px solid #d7e8f5",
-        }}
-      >
-        <Toolbar
-          sx={{ minHeight: { xs: "64px !important", md: "72px !important" } }}
+    <InboxEventsProvider enabled={canViewInbox}>
+      <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f2f9ff" }}>
+        <CssBaseline />
+        <SessionGuard />
+        <PermissionsLoader />
+        <AppBar
+          position="fixed"
+          elevation={0}
+          sx={{
+            width: { md: `calc(100% - ${drawerWidth}px)` },
+            ml: { md: `${drawerWidth}px` },
+            bgcolor: "#ffffffd9",
+            backdropFilter: "blur(6px)",
+            color: "#264a66",
+            borderBottom: "1px solid #d7e8f5",
+          }}
         >
-          {!isDesktop && (
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={() => setMobileOpen((open) => !open)}
-              sx={{ mr: 2 }}
-            >
-              <Menu />
-            </IconButton>
-          )}
-          <Typography
-            variant="h6"
-            sx={{
-              fontWeight: 700,
-              fontSize: { xs: "1rem", sm: "1.1rem" },
-              lineHeight: 1.2,
-            }}
+          <Toolbar
+            sx={{ minHeight: { xs: "64px !important", md: "72px !important" } }}
           >
-            Human Resource Portal
-          </Typography>
-          <Box
-            sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}
-          >
-            <InboxPreviewMenu />
-            <IconButton
-              aria-label={
-                unreadNotifications.count > 0
-                  ? `Open notifications, ${unreadLabel} unread`
-                  : "Open notifications"
-              }
-              onClick={() => setNotificationsOpen(true)}
+            {!isDesktop && (
+              <IconButton
+                color="inherit"
+                aria-label="open drawer"
+                edge="start"
+                onClick={() => setMobileOpen((open) => !open)}
+                sx={{ mr: 2 }}
+              >
+                <Menu />
+              </IconButton>
+            )}
+            <Typography
+              variant="h6"
               sx={{
-                color: "#1f80b6",
-                bgcolor: "#ecf7ff",
-                border: "1px solid #d3e8f5",
-                "&:hover": { bgcolor: "#e2f1fb" },
+                fontWeight: 700,
+                fontSize: { xs: "1rem", sm: "1.1rem" },
+                lineHeight: 1.2,
               }}
             >
-              {/* MUI hides the badge at 0 and renders "99+" above max. */}
-              <Badge
-                color="error"
-                badgeContent={unreadNotifications.count}
-                max={NOTIFICATION_BADGE_MAX}
-              >
-                <NotificationsNone />
-              </Badge>
-            </IconButton>
+              Human Resource Portal
+            </Typography>
             <Box
-              onMouseEnter={(event) => setAccountAnchorEl(event.currentTarget)}
-              onMouseLeave={closeAccountMenu}
-              sx={{ display: "inline-flex", alignItems: "center" }}
+              sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 1 }}
             >
+              {/* Inbox hidden for now. */}
+              {/* {canViewInbox && <InboxPreviewMenu />} */}
               <IconButton
-                aria-label="Account menu"
-                aria-controls={accountMenuOpen ? "account-menu" : undefined}
-                aria-haspopup="true"
-                onClick={(event) => setAccountAnchorEl(event.currentTarget)}
-                sx={{ p: 0.4 }}
-              >
-                <Avatar
-                  src={currentUser?.profilePictureUrl ?? undefined}
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    bgcolor: "#1f80b6",
-                    fontSize: "0.95rem",
-                    fontWeight: 700,
-                  }}
-                >
-                  {userInitials}
-                </Avatar>
-              </IconButton>
-
-              <MuiMenu
-                id="account-menu"
-                anchorEl={accountAnchorEl}
-                open={accountMenuOpen}
-                onClose={closeAccountMenu}
-                disableRestoreFocus
-                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-                transformOrigin={{ vertical: "top", horizontal: "right" }}
-                slotProps={{
-                  list: {
-                    onMouseLeave: closeAccountMenu,
-                    sx: { minWidth: 180 },
-                  },
-                  paper: { sx: { pointerEvents: "auto" } },
+                aria-label={
+                  unreadNotifications.count > 0
+                    ? `Open notifications, ${unreadLabel} unread`
+                    : "Open notifications"
+                }
+                onClick={() => setNotificationsOpen(true)}
+                sx={{
+                  color: "#1f80b6",
+                  bgcolor: "#ecf7ff",
+                  border: "1px solid #d3e8f5",
+                  "&:hover": { bgcolor: "#e2f1fb" },
                 }}
-                sx={{ pointerEvents: "none" }}
               >
-                <MenuItem
-                  onClick={() => {
-                    closeAccountMenu();
-                    router.push("/hr/settings");
-                  }}
+                {/* MUI hides the badge at 0 and renders "99+" above max. */}
+                <Badge
+                  color="error"
+                  badgeContent={unreadNotifications.count}
+                  max={NOTIFICATION_BADGE_MAX}
                 >
-                  <ListItemIcon>
-                    <PersonOutlined fontSize="small" />
-                  </ListItemIcon>
-                  My Account
-                </MenuItem>
-                <Divider />
-                <MenuItem
-                  onClick={() => {
-                    closeAccountMenu();
-                    clearToken();
-                    dispatch(clearUser());
-                    router.push("/login");
-                  }}
+                  <NotificationsNone />
+                </Badge>
+              </IconButton>
+              <Box
+                onMouseEnter={(event) =>
+                  setAccountAnchorEl(event.currentTarget)
+                }
+                onMouseLeave={closeAccountMenu}
+                sx={{ display: "inline-flex", alignItems: "center" }}
+              >
+                <IconButton
+                  aria-label="Account menu"
+                  aria-controls={accountMenuOpen ? "account-menu" : undefined}
+                  aria-haspopup="true"
+                  onClick={(event) => setAccountAnchorEl(event.currentTarget)}
+                  sx={{ p: 0.4 }}
                 >
-                  <ListItemIcon>
-                    <Logout fontSize="small" />
-                  </ListItemIcon>
-                  Logout
-                </MenuItem>
-              </MuiMenu>
+                  <Avatar
+                    src={currentUser?.profilePictureUrl ?? undefined}
+                    sx={{
+                      width: 36,
+                      height: 36,
+                      bgcolor: "#1f80b6",
+                      fontSize: "0.95rem",
+                      fontWeight: 700,
+                    }}
+                  >
+                    {userInitials}
+                  </Avatar>
+                </IconButton>
+
+                <MuiMenu
+                  id="account-menu"
+                  anchorEl={accountAnchorEl}
+                  open={accountMenuOpen}
+                  onClose={closeAccountMenu}
+                  disableRestoreFocus
+                  anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                  transformOrigin={{ vertical: "top", horizontal: "right" }}
+                  slotProps={{
+                    list: {
+                      onMouseLeave: closeAccountMenu,
+                      sx: { minWidth: 180 },
+                    },
+                    paper: { sx: { pointerEvents: "auto" } },
+                  }}
+                  sx={{ pointerEvents: "none" }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      closeAccountMenu();
+                      router.push("/hr/settings");
+                    }}
+                  >
+                    <ListItemIcon>
+                      <PersonOutlined fontSize="small" />
+                    </ListItemIcon>
+                    My Account
+                  </MenuItem>
+                  <Divider />
+                  <MenuItem
+                    onClick={() => {
+                      closeAccountMenu();
+                      clearToken();
+                      dispatch(clearUser());
+                      // Drop cached mail so the next user never sees it.
+                      queryClient.clear();
+                      router.push("/login");
+                    }}
+                  >
+                    <ListItemIcon>
+                      <Logout fontSize="small" />
+                    </ListItemIcon>
+                    Logout
+                  </MenuItem>
+                </MuiMenu>
+              </Box>
             </Box>
-          </Box>
-        </Toolbar>
-      </AppBar>
+          </Toolbar>
+        </AppBar>
 
-      <Box
-        component="nav"
-        sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: true }}
+        <Box
+          component="nav"
+          sx={{ width: { md: drawerWidth }, flexShrink: { md: 0 } }}
+        >
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={() => setMobileOpen(false)}
+            ModalProps={{ keepMounted: true }}
+            sx={{
+              display: { xs: "block", md: "none" },
+              "& .MuiDrawer-paper": {
+                boxSizing: "border-box",
+                width: "min(82vw, 320px)",
+                borderRight: "none",
+              },
+            }}
+          >
+            {drawerContent}
+          </Drawer>
+
+          <Drawer
+            variant="permanent"
+            open
+            sx={{
+              display: { xs: "none", md: "block" },
+              "& .MuiDrawer-paper": {
+                boxSizing: "border-box",
+                width: drawerWidth,
+                borderRight: "none",
+              },
+            }}
+          >
+            {drawerContent}
+          </Drawer>
+        </Box>
+
+        <Box
+          component="main"
           sx={{
-            display: { xs: "block", md: "none" },
-            "& .MuiDrawer-paper": {
-              boxSizing: "border-box",
-              width: "min(82vw, 320px)",
-              borderRight: "none",
-            },
+            flexGrow: 1,
+            minWidth: 0,
+            overflowX: "hidden",
+            p: { xs: 1.25, sm: 2.5, md: 3.5 },
+            mt: { xs: "64px", md: "72px" },
+            background:
+              "radial-gradient(circle at top right, #e8f6ff 0%, #f6fbff 40%, #f1fbf7 100%)",
           }}
         >
-          {drawerContent}
-        </Drawer>
+          {children}
+        </Box>
 
-        <Drawer
-          variant="permanent"
-          open
-          sx={{
-            display: { xs: "none", md: "block" },
-            "& .MuiDrawer-paper": {
-              boxSizing: "border-box",
-              width: drawerWidth,
-              borderRight: "none",
-            },
-          }}
-        >
-          {drawerContent}
-        </Drawer>
+        <NotificationPanel
+          open={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          unreadCount={unreadNotifications.count}
+          onItemRead={() => unreadNotifications.adjust(-1)}
+          onAllRead={unreadNotifications.reset}
+          onSyncUnreadCount={unreadNotifications.refresh}
+        />
       </Box>
-
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          minWidth: 0,
-          overflowX: "hidden",
-          p: { xs: 1.25, sm: 2.5, md: 3.5 },
-          mt: { xs: "64px", md: "72px" },
-          background:
-            "radial-gradient(circle at top right, #e8f6ff 0%, #f6fbff 40%, #f1fbf7 100%)",
-        }}
-      >
-        {children}
-      </Box>
-
-      <NotificationPanel
-        open={notificationsOpen}
-        onClose={() => setNotificationsOpen(false)}
-        unreadCount={unreadNotifications.count}
-        onItemRead={() => unreadNotifications.adjust(-1)}
-        onAllRead={unreadNotifications.reset}
-        onSyncUnreadCount={unreadNotifications.refresh}
-      />
-    </Box>
+    </InboxEventsProvider>
   );
 }

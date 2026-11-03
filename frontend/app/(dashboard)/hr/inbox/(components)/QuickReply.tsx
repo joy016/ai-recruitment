@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   IconButton,
   Stack,
@@ -11,43 +12,58 @@ import {
   Tooltip,
 } from "@mui/material";
 import { AutoAwesome, OpenInFull, Send } from "@mui/icons-material";
-import {
-  INBOX_COLORS,
-  MOCK_AI_DELAY_MS,
-  MOCK_AI_REPLY,
-} from "../(constants)/inbox.constants";
-import { fillName } from "../(utils)/inbox.utils";
+import { useInboxToast } from "@/app/component/InboxEventsProvider";
+import { aiSuggestReply } from "@/lib/api/inbox";
+import { INBOX_COLORS } from "../(constants)/inbox.constants";
+
+const MAX_SUGGESTIONS = 3;
 
 type QuickReplyProps = {
+  threadId: string;
   recipientName: string;
-  recipientFirstName: string;
-  onSend: (body: string) => void;
+  isSending: boolean;
+  /** Resolves true once the reply is queued, which clears the box. */
+  onSend: (body: string) => Promise<boolean>;
   /** Opens the full composer with the current text. */
   onExpand: (body: string) => void;
 };
 
 export default function QuickReply({
+  threadId,
   recipientName,
-  recipientFirstName,
+  isSending,
   onSend,
   onExpand,
 }: Readonly<QuickReplyProps>) {
+  const { notify } = useInboxToast();
   const [body, setBody] = useState("");
   const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
-  // DESIGN-ONLY: canned text after a short delay.
-  // TODO(wire-up): call the AI reply endpoint with the thread context.
-  const suggestReply = () => {
+  // AI text only fills the box; HR reviews it and presses Send.
+  const suggestReply = async () => {
     setIsSuggesting(true);
-    setTimeout(() => {
-      setBody(fillName(MOCK_AI_REPLY, recipientFirstName));
+    try {
+      const response = await aiSuggestReply(threadId);
+      const options = response.suggestions.map((text) => text.trim()).filter(Boolean).slice(0, MAX_SUGGESTIONS);
+      if (options.length === 0) {
+        notify("No suggestions available for this conversation.");
+        return;
+      }
+      setBody(options[0]);
+      setSuggestions(options.length > 1 ? options : []);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Couldn't get a suggestion.");
+    } finally {
       setIsSuggesting(false);
-    }, MOCK_AI_DELAY_MS);
+    }
   };
 
-  const send = () => {
-    onSend(body);
-    setBody("");
+  const send = async () => {
+    if (await onSend(body)) {
+      setBody("");
+      setSuggestions([]);
+    }
   };
 
   return (
@@ -58,6 +74,34 @@ export default function QuickReply({
         bgcolor: "#fbfdff",
       }}
     >
+      {suggestions.length > 0 && (
+        <Stack
+          direction="row"
+          role="group"
+          aria-label="AI suggestions"
+          spacing={0.8}
+          sx={{ mb: 1, overflowX: "auto", scrollbarWidth: "none" }}
+        >
+          {suggestions.map((suggestion, index) => (
+            <Chip
+              key={suggestion}
+              size="small"
+              icon={<AutoAwesome sx={{ fontSize: "14px !important" }} />}
+              label={`Suggestion ${index + 1}`}
+              title={suggestion}
+              clickable
+              aria-pressed={body === suggestion}
+              onClick={() => setBody(suggestion)}
+              sx={{
+                flexShrink: 0,
+                fontWeight: 600,
+                color: "#6d28d9",
+                bgcolor: body === suggestion ? "#e9e0ff" : "#f3eeff",
+              }}
+            />
+          ))}
+        </Stack>
+      )}
       <Box
         sx={{
           borderRadius: 3,
@@ -78,7 +122,7 @@ export default function QuickReply({
           placeholder={`Reply to ${recipientName}…`}
           value={body}
           onChange={(event) => setBody(event.target.value)}
-          disabled={isSuggesting}
+          disabled={isSuggesting || isSending}
           variant="standard"
           slotProps={{
             htmlInput: { "aria-label": `Quick reply to ${recipientName}` },
@@ -88,8 +132,8 @@ export default function QuickReply({
         <Stack direction="row" spacing={1} sx={{ alignItems: "center", p: 1 }}>
           <Button
             size="small"
-            onClick={suggestReply}
-            disabled={isSuggesting}
+            onClick={() => void suggestReply()}
+            disabled={isSuggesting || isSending}
             startIcon={
               isSuggesting ? <CircularProgress size={14} color="inherit" /> : <AutoAwesome />
             }
@@ -119,9 +163,9 @@ export default function QuickReply({
           <Button
             size="small"
             variant="contained"
-            endIcon={<Send />}
-            onClick={send}
-            disabled={!body.trim() || isSuggesting}
+            endIcon={isSending ? <CircularProgress size={14} color="inherit" /> : <Send />}
+            onClick={() => void send()}
+            disabled={!body.trim() || isSuggesting || isSending}
             sx={{
               textTransform: "none",
               fontWeight: 700,
@@ -130,7 +174,7 @@ export default function QuickReply({
               boxShadow: "none",
             }}
           >
-            Send
+            {isSending ? "Sending…" : "Send"}
           </Button>
         </Stack>
       </Box>

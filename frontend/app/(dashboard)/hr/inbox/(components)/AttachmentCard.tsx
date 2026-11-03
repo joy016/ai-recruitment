@@ -6,8 +6,9 @@ import {
   InsertDriveFile,
   PictureAsPdf,
 } from "@mui/icons-material";
+import type { InboxAttachment } from "@/lib/types/inbox";
 import { INBOX_COLORS } from "../(constants)/inbox.constants";
-import type { Attachment } from "../(types)/inbox.types";
+import { formatFileSize, getAttachmentKind } from "../(utils)/inbox.utils";
 
 const KIND_ICON = {
   pdf: { icon: PictureAsPdf, color: "#e53935", bg: "#fdecec" },
@@ -16,11 +17,8 @@ const KIND_ICON = {
   other: { icon: InsertDriveFile, color: "#5f7f96", bg: "#eef4f8" },
 } as const;
 
-export default function AttachmentCard({
-  attachment,
-  onDownload,
-}: Readonly<{ attachment: Attachment; onDownload: (attachment: Attachment) => void }>) {
-  const { icon: Icon, color, bg } = KIND_ICON[attachment.kind];
+export default function AttachmentCard({ attachment }: Readonly<{ attachment: InboxAttachment }>) {
+  const { icon: Icon, color, bg } = KIND_ICON[getAttachmentKind(attachment.mimeType, attachment.filename)];
 
   return (
     <Stack
@@ -58,21 +56,29 @@ export default function AttachmentCard({
       </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography noWrap sx={{ fontSize: "0.85rem", fontWeight: 600, color: INBOX_COLORS.text }}>
-          {attachment.fileName}
+          {attachment.filename}
         </Typography>
         <Typography variant="caption" sx={{ color: INBOX_COLORS.muted }}>
-          {attachment.size}
+          {formatFileSize(attachment.size)}
         </Typography>
       </Box>
-      <Tooltip title="Download">
-        <IconButton
-          size="small"
-          aria-label={`Download ${attachment.fileName}`}
-          onClick={() => onDownload(attachment)}
-          sx={{ color: INBOX_COLORS.primary }}
-        >
-          <FileDownloadOutlined fontSize="small" />
-        </IconButton>
+      <Tooltip title={attachment.url ? "Download" : "Download unavailable"}>
+        <span>
+          {/* Signed, short-lived URL from the API. */}
+          <IconButton
+            size="small"
+            component="a"
+            href={attachment.url ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            download={attachment.filename}
+            disabled={!attachment.url}
+            aria-label={`Download ${attachment.filename}`}
+            sx={{ color: INBOX_COLORS.primary }}
+          >
+            <FileDownloadOutlined fontSize="small" />
+          </IconButton>
+        </span>
       </Tooltip>
     </Stack>
   );

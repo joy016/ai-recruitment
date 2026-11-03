@@ -1,41 +1,61 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Box,
+  Button,
   Drawer,
   Paper,
-  Snackbar,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
+import ConfirmationModal from "@/app/component/ConfirmationModal";
+import { useInboxToast } from "@/app/component/InboxEventsProvider";
+import { PERMISSIONS } from "@/constant/permissions";
+import { retrySend, toInboxError } from "@/lib/api/inbox";
+import {
+  invalidateInbox,
+  useInboxCounts,
+  useInboxMessages,
+  useInboxThread,
+  useSendEmail,
+  useThreadActions,
+  type ThreadMoveAction,
+} from "@/lib/hooks/useInbox";
+import { usePermissions } from "@/lib/hooks/usePermissions";
+import { useAppSelector } from "@/lib/store/hooks";
+import type { EmailMessage, InboxThread } from "@/lib/types/inbox";
+import { htmlToText, textToHtml } from "@/lib/utils/emailHtml";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   EMPTY_DRAFT,
   FOLDERS,
   INBOX_COLORS,
   LABELS,
+  SEARCH_DEBOUNCE_MS,
 } from "../(constants)/inbox.constants";
-import { CURRENT_USER, MOCK_THREADS } from "../(constants)/mockInbox";
 import type {
-  ComposeDraft,
+  ComposeInit,
   FolderId,
-  InboxMessage,
-  InboxThread,
+  KnownRecipient,
   LabelId,
   MessageFilter,
   MessageSort,
 } from "../(types)/inbox.types";
-import { formatFullDateTime, getVisibleThreads } from "../(utils)/inbox.utils";
+import {
+  buildReplyInit,
+  getCounterpart,
+  validateOutgoing,
+  withPrefix,
+  type ReplyMode,
+} from "../(utils)/inbox.utils";
 import ComposeDialog from "./ComposeDialog";
 import FolderList from "./FolderList";
 import InboxEmptyState from "./InboxEmptyState";
 import { MessageViewerSkeleton } from "./InboxSkeletons";
-import MessageList from "./MessageList";
-import MessageViewer, { type ReplyMode } from "./MessageViewer";
-
-// Simulated latency so the loading skeletons are visible in the design.
-const MOCK_LIST_DELAY_MS = 700;
-const MOCK_VIEWER_DELAY_MS = 350;
+import MessageList, { type BulkListAction } from "./MessageList";
+import MessageViewer from "./MessageViewer";
 
 // Header + page padding, plus room so the card ends above the global
 // "Chat AI" button (fixed bottom-right; top edge 72px up, 64px on phones)
@@ -46,48 +66,38 @@ const CARD_HEIGHT = {
   md: "calc(100dvh - 180px)",
 };
 
-type ComposeState = { key: number; title: string; draft: ComposeDraft };
+const MOVE_MESSAGES: Record<ThreadMoveAction, (count: number) => string> = {
+  archive: (count) => (count === 1 ? "Conversation archived." : `${count} conversations archived.`),
+  trash: (count) => (count === 1 ? "Conversation moved to Trash." : `${count} conversations moved to Trash.`),
+  restore: (count) => (count === 1 ? "Conversation restored." : `${count} conversations restored.`),
+};
 
-const withPrefix = (prefix: string, subject: string) =>
-  subject.toLowerCase().startsWith(prefix.toLowerCase()) ? subject : `${prefix} ${subject}`;
+const visuallyHidden = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  overflow: "hidden",
+  clip: "rect(0 0 0 0)",
+  whiteSpace: "nowrap",
+} as const;
 
-const quote = (message: InboxMessage) =>
-  `\n\nOn ${formatFullDateTime(message.sentAt)}, ${message.from.name} wrote:\n${message.body
-    .split("\n")
-    .map((line) => `> ${line}`)
-    .join("\n")}`;
-
-const notMe = (email: string) => email.toLowerCase() !== CURRENT_USER.email.toLowerCase();
-
-const buildReplyDraft = (
-  mode: ReplyMode,
-  thread: InboxThread,
-  message: InboxMessage,
-  body = "",
-): ComposeDraft => {
-  if (mode === "forward") {
-    return {
-      ...EMPTY_DRAFT,
-      subject: withPrefix("Fwd:", thread.subject),
-      body: `${body}\n\n---------- Forwarded message ----------\nFrom: ${message.from.name} <${message.from.email}>\nDate: ${formatFullDateTime(message.sentAt)}\nSubject: ${thread.subject}\n\n${message.body}`,
-    };
-  }
-
-  const sentByMe = !notMe(message.from.email);
-  const to = sentByMe ? message.to.map((contact) => contact.email) : [message.from.email];
-  const cc =
-    mode === "replyAll"
-      ? [...message.to, ...(message.cc ?? [])]
-          .map((contact) => contact.email)
-          .filter((email) => notMe(email) && !to.includes(email))
-      : [];
-
+/** Reopens a message from Drafts in the composer. */
+const buildDraftInit = (thread: InboxThread, draft: EmailMessage): ComposeInit => {
+  const original = thread.messages.filter((message) => message.status !== "Draft").at(-1);
   return {
-    to,
-    cc,
-    bcc: [],
-    subject: withPrefix("Re:", thread.subject),
-    body: `${body}${quote(message)}`,
+    title: "Draft",
+    mode: original ? "reply" : "new",
+    replyToMessageId: original?.id,
+    draftId: draft.id,
+    threadId: thread.threadId,
+    draft: {
+      to: draft.toEmails,
+      cc: draft.ccEmails,
+      bcc: draft.bccEmails,
+      subject: draft.subject,
+      body: htmlToText(draft.bodyHtml),
+      attachments: draft.attachments,
+    },
   };
 };
 
@@ -97,53 +107,84 @@ export default function InboxPage() {
   const isMdUp = useMediaQuery(theme.breakpoints.up("md"));
   // Side-by-side list + reading pane; below this one pane shows at a time.
   const isSplit = useMediaQuery(theme.breakpoints.up("lg"));
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
+  const { notify } = useInboxToast();
+  const { hasPermission } = usePermissions();
+  const canSend = hasPermission(PERMISSIONS.inbox.send);
+  const userEmail = useAppSelector((state) => state.user.currentUser?.email);
 
-  const [threads, setThreads] = useState<InboxThread[]>(MOCK_THREADS);
   const [folder, setFolder] = useState<FolderId>("inbox");
   const [label, setLabel] = useState<LabelId | null>(null);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<MessageFilter>("all");
   const [sort, setSort] = useState<MessageSort>("newest");
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  // Opened from the header preview: /hr/inbox?thread=<id>.
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(() => searchParams.get("thread"));
   const [checkedIds, setCheckedIds] = useState<Set<string>>(() => new Set());
-  const [isListLoading, setIsListLoading] = useState(true);
-  const [isViewerLoading, setIsViewerLoading] = useState(false);
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false);
-  const [compose, setCompose] = useState<ComposeState | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const viewerTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [compose, setCompose] = useState<{ key: number; init: ComposeInit } | null>(null);
+  const [deleteForeverIds, setDeleteForeverIds] = useState<string[] | null>(null);
+  const [announcement, setAnnouncement] = useState("");
 
-  // TODO(wire-up): replace with the mail API request.
+  const messagesQuery = useInboxMessages({ folder, search, filter, label, sort });
+  const countsQuery = useInboxCounts();
+  const threadQuery = useInboxThread(selectedThreadId);
+  const actions = useThreadActions();
+  const quickReply = useSendEmail();
+  const lastQuickReplyRef = useRef("");
+
+  // Search waits for typing to pause; a new query key starts at page 1.
   useEffect(() => {
-    const timer = setTimeout(() => setIsListLoading(false), MOCK_LIST_DELAY_MS);
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(viewerTimerRef.current);
-    };
-  }, []);
+    const timer = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
-  const visibleThreads = useMemo(
-    () => getVisibleThreads(threads, { folder, label, filter, sort, search }),
-    [threads, folder, label, filter, sort, search],
-  );
-  const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? null;
-  const visibleCheckedIds = visibleThreads.filter((thread) => checkedIds.has(thread.id)).map((thread) => thread.id);
+  // Follow ?thread= when the header preview links here again.
+  const threadParam = searchParams.get("thread");
+  const [lastThreadParam, setLastThreadParam] = useState(threadParam);
+  if (threadParam !== lastThreadParam) {
+    setLastThreadParam(threadParam);
+    if (threadParam) {
+      setFolder("inbox");
+      setLabel(null);
+      setSelectedThreadId(threadParam);
+    }
+  }
+
+  const threads = messagesQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = messagesQuery.data?.pages[0]?.total ?? 0;
+  const selectedThread = threadQuery.data ?? null;
+  const visibleCheckedIds = threads.filter((thread) => checkedIds.has(thread.threadId)).map((thread) => thread.threadId);
 
   const title = label
     ? LABELS[label].label
     : (FOLDERS.find((item) => item.id === folder)?.label ?? "Inbox");
 
-  const updateThreads = (ids: string[], change: (thread: InboxThread) => InboxThread | null) =>
-    setThreads((current) =>
-      current.flatMap((thread) => {
-        if (!ids.includes(thread.id)) return [thread];
-        const next = change(thread);
-        return next ? [next] : [];
-      }),
-    );
+  // Candidate addresses seen so far, for recipient suggestions and names.
+  const knownRecipients: KnownRecipient[] = [];
+  const seen = new Set<string>();
+  const addRecipient = (email: string, name: string) => {
+    const key = email.toLowerCase();
+    if (!email || seen.has(key)) return;
+    seen.add(key);
+    knownRecipients.push({ email, name });
+  };
+  if (selectedThread?.candidate) {
+    addRecipient(getCounterpart(selectedThread).email, selectedThread.candidate.fullName);
+  }
+  threads.forEach((row) => {
+    if (row.candidate && row.senderName.toLowerCase() === row.candidate.fullName.toLowerCase()) {
+      addRecipient(row.senderEmail, row.candidate.fullName);
+    }
+  });
 
-  const closeThreadIfAffected = (ids: string[]) => {
-    if (selectedThreadId && ids.includes(selectedThreadId)) setSelectedThreadId(null);
+  const announce = (message: string) => setAnnouncement(message);
+
+  const reportError = (error: unknown, retry?: () => void) => {
+    const inboxError = toInboxError(error);
+    notify(inboxError.message, inboxError.isNetworkError && retry ? { label: "Retry", onClick: retry } : undefined);
   };
 
   const resetView = () => {
@@ -163,40 +204,70 @@ export default function InboxPage() {
     resetView();
   };
 
+  const closeThreadIfAffected = (ids: string[]) => {
+    if (selectedThreadId && ids.includes(selectedThreadId)) setSelectedThreadId(null);
+  };
+
+  const openCompose = (init: ComposeInit) =>
+    setCompose((current) => ({ key: (current?.key ?? 0) + 1, init }));
+
+  const openNewMessage = () => {
+    setFolderDrawerOpen(false);
+    openCompose({ title: "New Message", mode: "new", draft: EMPTY_DRAFT });
+  };
+
+  const openDraft = (threadId: string) =>
+    actions
+      .loadThread(threadId)
+      .then((thread) => {
+        const draft = thread.messages.findLast((message) => message.status === "Draft");
+        if (draft && canSend) openCompose(buildDraftInit(thread, draft));
+        else setSelectedThreadId(threadId);
+      })
+      .catch((error) => reportError(error, () => void openDraft(threadId)));
+
   const openThread = (threadId: string) => {
-    setSelectedThreadId(threadId);
-    updateThreads([threadId], (thread) => ({ ...thread, isUnread: false }));
-    setIsViewerLoading(true);
-    clearTimeout(viewerTimerRef.current);
-    viewerTimerRef.current = setTimeout(() => setIsViewerLoading(false), MOCK_VIEWER_DELAY_MS);
+    if (folder === "drafts") void openDraft(threadId);
+    else setSelectedThreadId(threadId);
   };
 
-  const toggleStar = (threadId: string) =>
-    updateThreads([threadId], (thread) => ({ ...thread, isStarred: !thread.isStarred }));
+  const openReply = (mode: ReplyMode, message: EmailMessage, body?: string) => {
+    if (!selectedThread) return;
+    openCompose(buildReplyInit(mode, selectedThread, message, body, userEmail));
+  };
 
-  const archive = (ids: string[]) => {
-    updateThreads(ids, (thread) => ({ ...thread, folder: "archived" }));
+  const move = (ids: string[], action: ThreadMoveAction) => {
     closeThreadIfAffected(ids);
-    setToast(ids.length === 1 ? "Conversation archived." : `${ids.length} conversations archived.`);
+    actions
+      .move(ids, action)
+      .then(() => {
+        notify(MOVE_MESSAGES[action](ids.length));
+        announce(MOVE_MESSAGES[action](ids.length));
+      })
+      .catch((error) => reportError(error, () => move(ids, action)));
   };
 
-  // Trash first; deleting from Trash removes it from the mock list.
-  const remove = (ids: string[]) => {
-    updateThreads(ids, (thread) => (thread.folder === "trash" ? null : { ...thread, folder: "trash" }));
-    closeThreadIfAffected(ids);
-    setToast(ids.length === 1 ? "Conversation moved to Trash." : `${ids.length} conversations moved to Trash.`);
-  };
+  const setRead = (ids: string[], read: boolean) =>
+    actions.setRead(ids, read).catch((error) => reportError(error, () => void setRead(ids, read)));
 
-  const markRead = (ids: string[]) => updateThreads(ids, (thread) => ({ ...thread, isUnread: false }));
+  const toggleStar = (threadId: string, starred: boolean) =>
+    actions.toggleStar(threadId, starred).catch((error) => reportError(error, () => void toggleStar(threadId, starred)));
 
   const markUnread = (threadId: string) => {
-    updateThreads([threadId], (thread) => ({ ...thread, isUnread: true }));
     setSelectedThreadId(null);
+    void setRead([threadId], false);
   };
 
-  const runBulk = (action: (ids: string[]) => void) => {
-    action(visibleCheckedIds);
+  const runBulk = (action: BulkListAction) => {
+    const ids = visibleCheckedIds;
+    if (ids.length === 0) return;
+    if (action === "deleteForever") {
+      setDeleteForeverIds(ids);
+      return;
+    }
     setCheckedIds(new Set());
+    if (action === "markRead" || action === "markUnread") void setRead(ids, action === "markRead");
+    else move(ids, action);
   };
 
   const toggleCheck = (threadId: string) =>
@@ -209,31 +280,73 @@ export default function InboxPage() {
 
   const toggleCheckAll = () =>
     setCheckedIds(
-      visibleCheckedIds.length === visibleThreads.length
+      visibleCheckedIds.length === threads.length
         ? new Set()
-        : new Set(visibleThreads.map((thread) => thread.id)),
+        : new Set(threads.map((thread) => thread.threadId)),
     );
 
-  const openCompose = (draft: ComposeDraft = EMPTY_DRAFT, composeTitle = "New Message") =>
-    setCompose((current) => ({ key: (current?.key ?? 0) + 1, title: composeTitle, draft }));
+  /** The inline reply box: same validation and send flow as Compose. */
+  const sendQuickReply = async (body: string) => {
+    const thread = selectedThread;
+    const latest = thread?.messages.at(-1);
+    if (!thread || !latest) return false;
+    // Edited text after a failed attempt is a new attempt.
+    if (body !== lastQuickReplyRef.current) quickReply.resetAttempt();
+    lastQuickReplyRef.current = body;
 
-  const openReply = (mode: ReplyMode, message: InboxMessage, body?: string) => {
-    if (!selectedThread) return;
-    const titles: Record<ReplyMode, string> = { reply: "Reply", replyAll: "Reply all", forward: "Forward" };
-    openCompose(buildReplyDraft(mode, selectedThread, message, body), titles[mode]);
+    const draft = {
+      to: [getCounterpart(thread).email].filter(Boolean),
+      cc: [],
+      bcc: [],
+      subject: withPrefix("Re:", thread.subject),
+      body,
+    };
+    const firstError = Object.values(validateOutgoing(draft))[0];
+    if (firstError) {
+      notify(firstError);
+      return false;
+    }
+    try {
+      const response = await quickReply.send(
+        {
+          ...draft,
+          bodyHtml: textToHtml(body),
+          attachmentIds: [],
+          mode: "reply",
+          replyToMessageId: latest.id,
+        },
+        thread.threadId,
+      );
+      if (!response) return false;
+      notify("Sending…");
+      announce("Reply is sending.");
+      lastQuickReplyRef.current = "";
+      return true;
+    } catch (error) {
+      reportError(error);
+      announce("Reply wasn't sent.");
+      return false;
+    }
   };
+
+  const retryFailed = (messageId: string) =>
+    retrySend(messageId)
+      .then(() => {
+        notify("Sending…");
+        invalidateInbox(queryClient, selectedThreadId ? [selectedThreadId] : []);
+      })
+      .catch((error) => reportError(error, () => void retryFailed(messageId)));
 
   const folderList = (variant: "full" | "rail") => (
     <FolderList
-      threads={threads}
+      counts={countsQuery.data}
+      isCountsLoading={countsQuery.isPending}
+      canCompose={canSend}
       activeFolder={folder}
       activeLabel={label}
       onSelectFolder={selectFolder}
       onSelectLabel={selectLabel}
-      onCompose={() => {
-        setFolderDrawerOpen(false);
-        openCompose();
-      }}
+      onCompose={openNewMessage}
       variant={variant}
     />
   );
@@ -241,33 +354,41 @@ export default function InboxPage() {
   const list = (
     <MessageList
       title={title}
-      threads={visibleThreads}
-      isLoading={isListLoading}
+      folder={folder}
+      threads={threads}
+      total={total}
+      isLoading={messagesQuery.isPending}
+      isFetching={messagesQuery.isFetching && !messagesQuery.isFetchingNextPage}
+      errorMessage={messagesQuery.isError ? toInboxError(messagesQuery.error).message : null}
+      onRetry={() => void messagesQuery.refetch()}
+      hasMore={messagesQuery.hasNextPage}
+      isLoadingMore={messagesQuery.isFetchingNextPage}
+      onLoadMore={() => void messagesQuery.fetchNextPage()}
       selectedThreadId={selectedThreadId}
       checkedIds={checkedIds}
-      showRecipient={!label && (folder === "sent" || folder === "drafts")}
-      search={search}
+      search={searchInput}
       filter={filter}
       sort={sort}
-      onSearchChange={setSearch}
-      onFilterChange={setFilter}
+      onSearchChange={(value) => {
+        setSearchInput(value);
+        setCheckedIds(new Set());
+      }}
+      onFilterChange={(value) => {
+        setFilter(value);
+        setCheckedIds(new Set());
+      }}
       onSortChange={setSort}
       onOpenThread={openThread}
       onToggleCheck={toggleCheck}
       onToggleCheckAll={toggleCheckAll}
-      onToggleStar={toggleStar}
-      onBulkArchive={() => runBulk(archive)}
-      onBulkDelete={() => runBulk(remove)}
-      onBulkMarkRead={() => runBulk(markRead)}
+      onToggleStar={(threadId, starred) => void toggleStar(threadId, starred)}
+      onBulkAction={runBulk}
       onOpenFolders={isMdUp ? undefined : () => setFolderDrawerOpen(true)}
     />
   );
 
   const renderViewer = () => {
-    if (isListLoading || (selectedThread && isViewerLoading)) {
-      return <MessageViewerSkeleton />;
-    }
-    if (!selectedThread) {
+    if (!selectedThreadId) {
       return (
         <InboxEmptyState
           illustration="noSelection"
@@ -276,23 +397,63 @@ export default function InboxPage() {
         />
       );
     }
+    if (threadQuery.isPending) return <MessageViewerSkeleton />;
+    if (threadQuery.isError || !selectedThread) {
+      const error = toInboxError(threadQuery.error);
+      return (
+        <InboxEmptyState
+          illustration="noResults"
+          title={error.status === 404 ? "Conversation not found" : "Couldn't load this conversation"}
+          description={error.status === 404 ? "It may have been deleted." : error.message}
+          action={
+            <Box sx={{ display: "flex", gap: 1 }}>
+              {!isSplit && (
+                <Button size="small" onClick={() => setSelectedThreadId(null)} sx={{ textTransform: "none" }}>
+                  Back
+                </Button>
+              )}
+              {error.status !== 404 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => void threadQuery.refetch()}
+                  sx={{ textTransform: "none", borderRadius: 2 }}
+                >
+                  Retry
+                </Button>
+              )}
+            </Box>
+          }
+        />
+      );
+    }
+    const threadId = selectedThread.threadId;
     return (
       <MessageViewer
-        key={selectedThread.id}
+        key={threadId}
         thread={selectedThread}
+        folder={folder}
+        canSend={canSend}
         onBack={isSplit ? undefined : () => setSelectedThreadId(null)}
         onCompose={openReply}
-        onArchive={(id) => archive([id])}
-        onDelete={(id) => remove([id])}
-        onToggleStar={toggleStar}
-        onMarkUnread={markUnread}
-        onNotify={setToast}
+        onMove={(action) => move([threadId], action)}
+        onDeleteForever={() => setDeleteForeverIds([threadId])}
+        onToggleStar={(starred) => void toggleStar(threadId, starred)}
+        onMarkUnread={() => markUnread(threadId)}
+        onMarkRead={() => {
+          actions.markThreadRead(selectedThread).catch(() => {
+            // Not worth interrupting the reader; the list keeps it bold.
+          });
+        }}
+        onQuickReply={sendQuickReply}
+        isSendingQuickReply={quickReply.isSending}
+        onRetrySend={(messageId) => void retryFailed(messageId)}
       />
     );
   };
 
   const paneBorder = `1px solid ${INBOX_COLORS.divider}`;
-  const showViewerOnly = !isSplit && selectedThread !== null;
+  const showViewerOnly = !isSplit && selectedThreadId !== null;
 
   return (
     <>
@@ -357,29 +518,40 @@ export default function InboxPage() {
       {compose && (
         <ComposeDialog
           key={compose.key}
-          open
-          title={compose.title}
-          initialDraft={compose.draft}
-          onClose={() => setCompose(null)}
-          onSend={() => {
+          init={compose.init}
+          knownRecipients={knownRecipients}
+          onClose={() => {
             setCompose(null);
-            setToast("Preview only: sending isn't connected yet.");
+            announce("Composer closed.");
           }}
-          onSaveDraft={() => {
-            setCompose(null);
-            setToast("Preview only: draft not saved.");
-          }}
-          onNotify={setToast}
         />
       )}
 
-      <Snackbar
-        open={toast !== null}
-        autoHideDuration={3500}
-        onClose={() => setToast(null)}
-        message={toast}
-        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+      <ConfirmationModal
+        open={deleteForeverIds !== null}
+        title="Delete forever?"
+        description={
+          deleteForeverIds && deleteForeverIds.length > 1
+            ? `${deleteForeverIds.length} conversations will be permanently deleted. This can't be undone.`
+            : "This conversation will be permanently deleted. This can't be undone."
+        }
+        confirmLabel="Delete forever"
+        confirmTone="danger"
+        onConfirm={async () => {
+          const ids = deleteForeverIds ?? [];
+          closeThreadIfAffected(ids);
+          setCheckedIds(new Set());
+          await actions.deleteForever(ids);
+          const message = ids.length === 1 ? "Conversation deleted forever." : `${ids.length} conversations deleted forever.`;
+          notify(message);
+          announce(message);
+        }}
+        onClose={() => setDeleteForeverIds(null)}
       />
+
+      <Box aria-live="polite" role="status" sx={visuallyHidden}>
+        {announcement}
+      </Box>
     </>
   );
 }

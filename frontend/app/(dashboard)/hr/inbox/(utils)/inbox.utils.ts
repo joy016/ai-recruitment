@@ -1,49 +1,10 @@
-import type {
-  Contact,
-  FolderId,
-  InboxMessage,
-  InboxThread,
-  LabelId,
-  MessageFilter,
-  MessageSort,
-  MockCandidate,
-} from "../(types)/inbox.types";
-import { CURRENT_USER, findCandidateByEmail } from "../(constants)/mockInbox";
-
-export const getLatestMessage = (thread: InboxThread): InboxMessage =>
-  thread.messages[thread.messages.length - 1];
-
-const isMe = (contact: Contact) =>
-  contact.email.toLowerCase() === CURRENT_USER.email.toLowerCase();
-
-/** The other party: the latest sender who isn't us, else the first recipient. */
-export const getCounterpart = (thread: InboxThread): Contact => {
-  for (let index = thread.messages.length - 1; index >= 0; index--) {
-    const { from } = thread.messages[index];
-    if (!isMe(from)) return from;
-  }
-  return thread.messages[0].to[0] ?? CURRENT_USER;
-};
-
-export const getThreadCandidate = (thread: InboxThread): MockCandidate | null => {
-  for (const message of thread.messages) {
-    for (const contact of [message.from, ...message.to]) {
-      const candidate = isMe(contact) ? null : findCandidateByEmail(contact.email);
-      if (candidate) return candidate;
-    }
-  }
-  return null;
-};
-
-export const threadHasAttachments = (thread: InboxThread) =>
-  thread.messages.some((message) => message.attachments.length > 0);
-
-/** The latest message was sent by a known candidate. */
-export const isCandidateReply = (thread: InboxThread) =>
-  findCandidateByEmail(getLatestMessage(thread).from.email) !== null;
-
-export const getPreview = (message: InboxMessage) =>
-  message.body.replace(/\s+/g, " ").trim();
+import type { EmailMessage, InboxThread, SendMode } from "@/lib/types/inbox";
+import {
+  BLOCKED_ATTACHMENT_EXTENSIONS,
+  EMPTY_DRAFT,
+  MAX_ATTACHMENT_BYTES,
+} from "../(constants)/inbox.constants";
+import type { ComposeDraft, ComposeInit } from "../(types)/inbox.types";
 
 export const getInitials = (name: string) =>
   name
@@ -70,9 +31,6 @@ export const getAvatarColor = (seed: string) => {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 };
 
-export const formatContact = (contact: Contact) =>
-  isMe(contact) ? "me" : contact.name;
-
 const timeFormatter = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
   minute: "2-digit",
@@ -94,9 +52,16 @@ const fullFormatter = new Intl.DateTimeFormat("en-US", {
 
 const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
+/**
+ * The API serializes UTC DateTimes; values without an offset are UTC too, so
+ * read them as such instead of as local time.
+ */
+export const parseApiDate = (iso: string) =>
+  new Date(/[zZ]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`);
+
 /** List time: "9:26 am" today, "Yesterday", else "Oct 27". */
 export const formatListTime = (iso: string, now = new Date()) => {
-  const date = new Date(iso);
+  const date = parseApiDate(iso);
   if (isSameDay(date, now)) return timeFormatter.format(date).toLowerCase();
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
@@ -105,88 +70,170 @@ export const formatListTime = (iso: string, now = new Date()) => {
 };
 
 /** "Fri, Oct 30, 2026, 9:26 AM". */
-export const formatFullDateTime = (iso: string) =>
-  fullFormatter.format(new Date(iso));
+export const formatFullDateTime = (iso: string) => fullFormatter.format(parseApiDate(iso));
 
 /** Matches the Candidates table: "11/4/2026, 10:00 am". */
 export const formatSchedule = (iso: string | null) => {
   if (!iso) return "Not scheduled";
-  const date = new Date(iso);
+  const date = parseApiDate(iso);
   return `${date.toLocaleDateString("en-US")}, ${timeFormatter.format(date).toLowerCase()}`;
 };
 
-export const getFirstName = (nameOrEmail: string) => {
-  const candidate = findCandidateByEmail(nameOrEmail);
-  const name = candidate?.name ?? nameOrEmail.split("@")[0];
-  return name.split(/[\s.]+/)[0].replace(/^\w/, (char) => char.toUpperCase());
+export const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export const fillName = (text: string, name: string) =>
-  text.replaceAll("{name}", name || "there");
+export type AttachmentKind = "pdf" | "doc" | "image" | "other";
 
-export const isInFolder = (thread: InboxThread, folder: FolderId) =>
-  folder === "starred"
-    ? thread.isStarred && thread.folder !== "trash"
-    : thread.folder === folder;
-
-export const getFolderCount = (threads: InboxThread[], folder: FolderId) => {
-  const inFolder = threads.filter((thread) => isInFolder(thread, folder));
-  // Inbox shows unread; the rest show totals.
-  return folder === "inbox"
-    ? inFolder.filter((thread) => thread.isUnread).length
-    : inFolder.length;
+export const getAttachmentKind = (mimeType: string, filename: string): AttachmentKind => {
+  const lower = `${mimeType} ${filename}`.toLowerCase();
+  if (lower.includes("pdf")) return "pdf";
+  if (lower.startsWith("image/")) return "image";
+  if (/word|document|text\/|\.docx?\b|\.txt\b|\.rtf\b/.test(lower)) return "doc";
+  return "other";
 };
 
-type VisibleThreadsOptions = {
-  folder: FolderId;
-  label: LabelId | null;
-  filter: MessageFilter;
-  sort: MessageSort;
-  search: string;
+/** When a message was sent or received, for display. */
+export const getMessageTime = (message: EmailMessage) =>
+  message.receivedAt ?? message.sentAt ?? message.createdAt;
+
+export const isThreadStarred = (thread: InboxThread) =>
+  thread.messages.some((message) => message.isStarred);
+
+/**
+ * Addresses that are "us": senders of our outbound messages plus the
+ * signed-in user's own email. Used to keep ourselves out of reply-all.
+ */
+const getOwnAddresses = (thread: InboxThread, userEmail?: string) => {
+  const own = new Set(
+    thread.messages
+      .filter((message) => message.direction === "Outbound")
+      .map((message) => message.fromEmail.toLowerCase()),
+  );
+  if (userEmail) own.add(userEmail.toLowerCase());
+  return own;
 };
 
-export const getVisibleThreads = (
-  threads: InboxThread[],
-  { folder, label, filter, sort, search }: VisibleThreadsOptions,
-) => {
-  const query = search.trim().toLowerCase();
-
-  const visible = threads.filter((thread) => {
-    if (label ? thread.folder === "trash" || !thread.labels.includes(label) : !isInFolder(thread, folder)) {
-      return false;
+/** The other party: the latest inbound sender, else the first recipient. */
+export const getCounterpart = (thread: InboxThread) => {
+  for (let index = thread.messages.length - 1; index >= 0; index--) {
+    const message = thread.messages[index];
+    if (message.direction === "Inbound") {
+      return { name: message.fromName || message.fromEmail, email: message.fromEmail };
     }
-    if (filter === "unread" && !thread.isUnread) return false;
-    if (filter === "attachments" && !threadHasAttachments(thread)) return false;
-    if (filter === "candidates" && !isCandidateReply(thread)) return false;
-    if (!query) return true;
+  }
+  const email = thread.messages[0]?.toEmails[0] ?? "";
+  return { name: email, email };
+};
 
-    const haystack = [
-      thread.subject,
-      ...thread.messages.flatMap((message) => [
-        message.body,
-        message.from.name,
-        message.from.email,
-        ...message.to.map((contact) => contact.name),
-      ]),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return haystack.includes(query);
-  });
+export const getFirstName = (name: string) =>
+  name.split(/[\s.@]+/)[0].replace(/^\w/, (char) => char.toUpperCase());
 
-  const latestTime = (thread: InboxThread) =>
-    new Date(getLatestMessage(thread).sentAt).getTime();
+export const withPrefix = (prefix: string, subject: string) => {
+  const trimmed = subject.trim();
+  return trimmed.toLowerCase().startsWith(prefix.toLowerCase()) ? trimmed : `${prefix} ${trimmed}`;
+};
 
-  return visible.sort((a, b) => {
-    switch (sort) {
-      case "oldest":
-        return latestTime(a) - latestTime(b);
-      case "sender":
-        return getCounterpart(a).name.localeCompare(getCounterpart(b).name);
-      case "unread":
-        return Number(b.isUnread) - Number(a.isUnread) || latestTime(b) - latestTime(a);
-      default:
-        return latestTime(b) - latestTime(a);
-    }
-  });
+const quote = (message: EmailMessage) =>
+  `\n\nOn ${formatFullDateTime(getMessageTime(message))}, ${message.fromName || message.fromEmail} wrote:\n${message.bodyText
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n")}`;
+
+export type ReplyMode = "reply" | "replyAll" | "forward";
+
+const SEND_MODES: Record<ReplyMode, SendMode> = {
+  reply: "reply",
+  replyAll: "reply_all",
+  forward: "forward",
+};
+
+const REPLY_TITLES: Record<ReplyMode, string> = {
+  reply: "Reply",
+  replyAll: "Reply all",
+  forward: "Forward",
+};
+
+/**
+ * Prefills Reply / Reply all / Forward like the backend would. For Forward
+ * the backend appends the original message and its attachments itself.
+ */
+export const buildReplyInit = (
+  mode: ReplyMode,
+  thread: InboxThread,
+  message: EmailMessage,
+  body = "",
+  userEmail?: string,
+): ComposeInit => {
+  const base = {
+    title: REPLY_TITLES[mode],
+    mode: SEND_MODES[mode],
+    replyToMessageId: message.id,
+    threadId: thread.threadId,
+  };
+
+  if (mode === "forward") {
+    return {
+      ...base,
+      draft: { ...EMPTY_DRAFT, subject: withPrefix("Fwd:", thread.subject), body },
+    };
+  }
+
+  const own = getOwnAddresses(thread, userEmail);
+  const notOwn = (email: string) => !own.has(email.toLowerCase());
+  const to = message.direction === "Outbound" ? message.toEmails : [message.fromEmail];
+  const cc =
+    mode === "replyAll"
+      ? [...new Set([...message.toEmails, ...message.ccEmails])].filter(
+          (email) => notOwn(email) && !to.some((item) => item.toLowerCase() === email.toLowerCase()),
+        )
+      : [];
+
+  return {
+    ...base,
+    draft: {
+      ...EMPTY_DRAFT,
+      to,
+      cc,
+      subject: withPrefix("Re:", thread.subject),
+      body: `${body}${quote(message)}`,
+    },
+  };
+};
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const isValidEmail = (email: string) => EMAIL_PATTERN.test(email.trim());
+
+export type DraftErrors = Partial<Record<"to" | "cc" | "bcc" | "subject" | "body" | "attachments", string>>;
+
+/** Checks run before every send. An empty result means it can be sent. */
+export const validateOutgoing = (
+  draft: Pick<ComposeDraft, "to" | "cc" | "bcc" | "subject" | "body">,
+  attachmentBytes = 0,
+): DraftErrors => {
+  const errors: DraftErrors = {};
+  if (draft.to.length === 0) errors.to = "Add at least one recipient.";
+  for (const field of ["to", "cc", "bcc"] as const) {
+    const invalid = draft[field].find((email) => !isValidEmail(email));
+    if (invalid) errors[field] = `"${invalid}" isn't a valid email address.`;
+  }
+  if (!draft.subject.trim()) errors.subject = "Add a subject.";
+  if (!draft.body.trim()) errors.body = "Write a message.";
+  if (attachmentBytes > MAX_ATTACHMENT_BYTES) {
+    errors.attachments = "Attachments can't be more than 20 MB in total.";
+  }
+  return errors;
+};
+
+/** Why a file can't be attached, or null if it's fine. */
+export const getAttachmentError = (file: { name: string; size: number }) => {
+  const dot = file.name.lastIndexOf(".");
+  const extension = dot === -1 ? "" : file.name.slice(dot).toLowerCase();
+  if (BLOCKED_ATTACHMENT_EXTENSIONS.has(extension)) return "This file type isn't allowed.";
+  if (file.size === 0) return "The file is empty.";
+  if (file.size > MAX_ATTACHMENT_BYTES) return "Files can't be larger than 20 MB.";
+  return null;
 };

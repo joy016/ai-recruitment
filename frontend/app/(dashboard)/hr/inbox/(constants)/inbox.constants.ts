@@ -47,18 +47,19 @@ export const LABELS: Record<LabelId, { label: string; color: string }> = {
 
 export const LABEL_IDS = Object.keys(LABELS) as LabelId[];
 
+export const isKnownLabel = (label: string): label is LabelId => label in LABELS;
+
 export const MESSAGE_FILTERS: { id: MessageFilter; label: string }[] = [
   { id: "all", label: "All" },
   { id: "unread", label: "Unread" },
   { id: "attachments", label: "With attachments" },
-  { id: "candidates", label: "Candidate replies" },
+  { id: "candidate_replies", label: "Candidate replies" },
 ];
 
+// The API only orders by last activity.
 export const MESSAGE_SORTS: { id: MessageSort; label: string }[] = [
   { id: "newest", label: "Newest first" },
   { id: "oldest", label: "Oldest first" },
-  { id: "sender", label: "Sender (A–Z)" },
-  { id: "unread", label: "Unread first" },
 ];
 
 /**
@@ -81,49 +82,21 @@ export const EMPTY_DRAFT: ComposeDraft = {
   bcc: [],
   subject: "",
   body: "",
+  attachments: [],
 };
 
-export type EmailTemplateId =
-  | "interviewInvitation"
-  | "rejectionNotice"
-  | "jobOffer"
-  | "requestDocuments";
+/** Mirrors the backend's InboxAttachmentPolicy. */
+export const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+export const BLOCKED_ATTACHMENT_EXTENSIONS = new Set([
+  ".exe", ".bat", ".cmd", ".com", ".msi", ".msp", ".scr", ".ps1", ".psm1",
+  ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".sh", ".bash", ".app",
+  ".dll", ".jar", ".apk", ".gadget", ".cpl", ".reg",
+]);
 
-/** `{name}` is replaced with the first recipient's first name. */
-export const EMAIL_TEMPLATES: Record<
-  EmailTemplateId,
-  { label: string; subject: string; body: string }
-> = {
-  interviewInvitation: {
-    label: "Interview Invitation",
-    subject: "Interview Invitation – Next Steps",
-    body: "Hi {name},\n\nThank you for your interest in joining our team. We'd like to invite you to an interview to discuss your experience in more detail.\n\nPlease let us know which of the following slots works best for you, and we'll send a calendar invite.\n\nBest regards,\nHR Recruitment Team",
-  },
-  rejectionNotice: {
-    label: "Rejection Notice",
-    subject: "Update on Your Application",
-    body: "Hi {name},\n\nThank you for taking the time to apply and for your interest in our company. After careful consideration, we've decided to move forward with other candidates whose experience more closely matches the role.\n\nWe'll keep your profile on file for future openings.\n\nKind regards,\nHR Recruitment Team",
-  },
-  jobOffer: {
-    label: "Job Offer",
-    subject: "Job Offer – Welcome Aboard!",
-    body: "Hi {name},\n\nWe're delighted to offer you the position! Attached you'll find the offer letter with the compensation and start date details.\n\nPlease review it and let us know if you have any questions. We're excited to have you on the team.\n\nBest regards,\nHR Recruitment Team",
-  },
-  requestDocuments: {
-    label: "Request for Documents",
-    subject: "Request for Pre-Employment Documents",
-    body: "Hi {name},\n\nTo continue with your application, please send us the following documents:\n\n• Government-issued ID\n• Certificate of Employment from previous employers\n• Transcript of Records\n\nYou can reply to this email with the files attached.\n\nThank you,\nHR Recruitment Team",
-  },
-};
+export const AI_TONES = ["Professional", "Friendly", "Formal", "Concise"] as const;
 
-export const EMAIL_TEMPLATE_IDS = Object.keys(EMAIL_TEMPLATES) as EmailTemplateId[];
-
-// TODO(wire-up): replace the canned text with the AI endpoint's response.
-export const MOCK_AI_REPLY =
-  "Hi {name},\n\nThank you for getting back to us. I've noted your message and will coordinate with the hiring team. I'll follow up with the confirmed details within the day.\n\nBest regards,\nHR Recruitment Team";
-
-export const MOCK_AI_DRAFT =
-  "Hi {name},\n\nI hope you're doing well. I'm reaching out regarding your application. Based on your experience, we'd love to continue the conversation and share the next steps in our hiring process.\n\nPlease let me know a convenient time to connect this week.\n\nBest regards,\nHR Recruitment Team";
-
-/** How long the mock AI "thinks" before filling text. */
-export const MOCK_AI_DELAY_MS = 900;
+/** Debounces. */
+export const SEARCH_DEBOUNCE_MS = 350;
+export const DRAFT_AUTOSAVE_MS = 2000;
+/** How long a conversation stays open before it is marked read. */
+export const MARK_READ_DELAY_MS = 1000;

@@ -29,6 +29,11 @@ export const PERMISSIONS = {
     view: "settings.view",
     manageSystemSettings: "settings.manageSystemSettings",
   },
+  inbox: {
+    view: "inbox.view",
+    send: "inbox.send",
+    manageTemplates: "inbox.manageTemplates",
+  },
 } as const;
 
 /** The dashboard is shown to anyone who can see at least one of its widgets. */

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v16-appRouter";
 import GlobalChatWidget from "@/app/component/GlobalChatWidget";
 import StoreProvider from "@/app/component/StoreProvider";
+import QueryProvider from "@/app/component/QueryProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -37,10 +38,12 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <StoreProvider>
-          <AppRouterCacheProvider>
-            {children}
-            <GlobalChatWidget />
-          </AppRouterCacheProvider>
+          <QueryProvider>
+            <AppRouterCacheProvider>
+              {children}
+              <GlobalChatWidget />
+            </AppRouterCacheProvider>
+          </QueryProvider>
         </StoreProvider>
       </body>
     </html>

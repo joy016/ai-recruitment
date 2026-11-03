@@ -3,8 +3,10 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   IconButton,
   InputAdornment,
+  LinearProgress,
   MenuItem,
   Select,
   Stack,
@@ -15,32 +17,43 @@ import {
 import {
   ArchiveOutlined,
   Close,
+  DeleteForeverOutlined,
   DeleteOutlined,
   DraftsOutlined,
+  MarkEmailUnreadOutlined,
   MenuOpen,
+  RestoreFromTrash,
   Search,
 } from "@mui/icons-material";
+import type { InboxThreadListItem } from "@/lib/types/inbox";
 import {
   INBOX_COLORS,
   MESSAGE_FILTERS,
   MESSAGE_SORTS,
 } from "../(constants)/inbox.constants";
-import type {
-  InboxThread,
-  MessageFilter,
-  MessageSort,
-} from "../(types)/inbox.types";
+import type { FolderId, MessageFilter, MessageSort } from "../(types)/inbox.types";
 import InboxEmptyState from "./InboxEmptyState";
 import { MessageListSkeleton } from "./InboxSkeletons";
 import MessageListItem from "./MessageListItem";
 
+export type BulkListAction = "archive" | "trash" | "markRead" | "markUnread" | "restore" | "deleteForever";
+
 type MessageListProps = {
   title: string;
-  threads: InboxThread[];
+  folder: FolderId;
+  threads: InboxThreadListItem[];
+  total: number;
+  /** First load, nothing to show yet. */
   isLoading: boolean;
+  /** Refetching (e.g. a new search) while older rows stay visible. */
+  isFetching: boolean;
+  errorMessage: string | null;
+  onRetry: () => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
   selectedThreadId: string | null;
   checkedIds: Set<string>;
-  showRecipient: boolean;
   search: string;
   filter: MessageFilter;
   sort: MessageSort;
@@ -50,21 +63,28 @@ type MessageListProps = {
   onOpenThread: (threadId: string) => void;
   onToggleCheck: (threadId: string) => void;
   onToggleCheckAll: () => void;
-  onToggleStar: (threadId: string) => void;
-  onBulkArchive: () => void;
-  onBulkDelete: () => void;
-  onBulkMarkRead: () => void;
+  onToggleStar: (threadId: string, starred: boolean) => void;
+  onBulkAction: (action: BulkListAction) => void;
   /** Mobile only: opens the folder drawer. */
   onOpenFolders?: () => void;
 };
 
+const bulkButtonSx = { color: INBOX_COLORS.primary } as const;
+
 export default function MessageList({
   title,
+  folder,
   threads,
+  total,
   isLoading,
+  isFetching,
+  errorMessage,
+  onRetry,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
   selectedThreadId,
   checkedIds,
-  showRecipient,
   search,
   filter,
   sort,
@@ -75,17 +95,39 @@ export default function MessageList({
   onToggleCheck,
   onToggleCheckAll,
   onToggleStar,
-  onBulkArchive,
-  onBulkDelete,
-  onBulkMarkRead,
+  onBulkAction,
   onOpenFolders,
 }: Readonly<MessageListProps>) {
-  const checkedCount = threads.filter((thread) => checkedIds.has(thread.id)).length;
+  const checkedCount = threads.filter((thread) => checkedIds.has(thread.threadId)).length;
   const allChecked = threads.length > 0 && checkedCount === threads.length;
   const isFiltered = search.trim() !== "" || filter !== "all";
+  const inTrash = folder === "trash";
+
+  const bulkButton = (action: BulkListAction, label: string, icon: React.ReactNode) => (
+    <Tooltip key={action} title={label}>
+      <IconButton size="small" aria-label={`${label} selected`} onClick={() => onBulkAction(action)} sx={bulkButtonSx}>
+        {icon}
+      </IconButton>
+    </Tooltip>
+  );
 
   const renderBody = () => {
     if (isLoading) return <MessageListSkeleton />;
+
+    if (errorMessage && threads.length === 0) {
+      return (
+        <InboxEmptyState
+          illustration="noResults"
+          title="Couldn't load messages"
+          description={errorMessage}
+          action={
+            <Button size="small" variant="outlined" onClick={onRetry} sx={{ textTransform: "none", borderRadius: 2 }}>
+              Retry
+            </Button>
+          }
+        />
+      );
+    }
 
     if (threads.length === 0) {
       return isFiltered ? (
@@ -110,26 +152,43 @@ export default function MessageList({
         <InboxEmptyState
           illustration="emptyInbox"
           title={`${title} is empty`}
-          description="You're all caught up. New messages will show up here."
+          description={
+            folder === "inbox" ? "You're all caught up. New messages will show up here." : "Nothing here yet."
+          }
         />
       );
     }
 
     return (
-      <Box component="ul" aria-label={`${title} messages`} sx={{ m: 0, p: 0, listStyle: "none" }}>
-        {threads.map((thread) => (
-          <MessageListItem
-            key={thread.id}
-            thread={thread}
-            selected={thread.id === selectedThreadId}
-            checked={checkedIds.has(thread.id)}
-            showRecipient={showRecipient}
-            onOpen={onOpenThread}
-            onToggleCheck={onToggleCheck}
-            onToggleStar={onToggleStar}
-          />
-        ))}
-      </Box>
+      <>
+        <Box component="ul" aria-label={`${title} messages`} sx={{ m: 0, p: 0, listStyle: "none" }}>
+          {threads.map((thread) => (
+            <MessageListItem
+              key={thread.threadId}
+              thread={thread}
+              selected={thread.threadId === selectedThreadId}
+              checked={checkedIds.has(thread.threadId)}
+              isDraft={folder === "drafts"}
+              onOpen={onOpenThread}
+              onToggleCheck={onToggleCheck}
+              onToggleStar={onToggleStar}
+            />
+          ))}
+        </Box>
+        {hasMore && (
+          <Box sx={{ p: 1.5, textAlign: "center" }}>
+            <Button
+              size="small"
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              startIcon={isLoadingMore ? <CircularProgress size={14} color="inherit" /> : undefined}
+              sx={{ textTransform: "none", fontWeight: 600, color: INBOX_COLORS.primary }}
+            >
+              {isLoadingMore ? "Loading…" : "Load more"}
+            </Button>
+          </Box>
+        )}
+      </>
     );
   };
 
@@ -242,6 +301,7 @@ export default function MessageList({
         role="toolbar"
         aria-label="Bulk actions"
         sx={{
+          position: "relative",
           alignItems: "center",
           minHeight: 44,
           pl: 0.5,
@@ -265,26 +325,28 @@ export default function MessageList({
             <Typography variant="body2" sx={{ fontWeight: 700, color: INBOX_COLORS.heading, mr: "auto" }}>
               {checkedCount} selected
             </Typography>
-            <Tooltip title="Archive">
-              <IconButton size="small" aria-label="Archive selected" onClick={onBulkArchive} sx={{ color: INBOX_COLORS.primary }}>
-                <ArchiveOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete">
-              <IconButton size="small" aria-label="Delete selected" onClick={onBulkDelete} sx={{ color: INBOX_COLORS.primary }}>
-                <DeleteOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Mark as read">
-              <IconButton size="small" aria-label="Mark selected as read" onClick={onBulkMarkRead} sx={{ color: INBOX_COLORS.primary }}>
-                <DraftsOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {inTrash
+              ? [
+                  bulkButton("restore", "Restore", <RestoreFromTrash fontSize="small" />),
+                  bulkButton("deleteForever", "Delete forever", <DeleteForeverOutlined fontSize="small" />),
+                ]
+              : [
+                  folder !== "archived" && bulkButton("archive", "Archive", <ArchiveOutlined fontSize="small" />),
+                  bulkButton("trash", "Delete", <DeleteOutlined fontSize="small" />),
+                  bulkButton("markRead", "Mark as read", <DraftsOutlined fontSize="small" />),
+                  bulkButton("markUnread", "Mark as unread", <MarkEmailUnreadOutlined fontSize="small" />),
+                ]}
           </>
         ) : (
-          <Typography variant="body2" sx={{ color: INBOX_COLORS.muted }}>
-            {isLoading ? "Loading…" : `${threads.length} conversation${threads.length === 1 ? "" : "s"}`}
+          <Typography variant="body2" sx={{ color: INBOX_COLORS.muted }} aria-live="polite">
+            {isLoading ? "Loading…" : `${total} conversation${total === 1 ? "" : "s"}`}
           </Typography>
+        )}
+        {isFetching && !isLoading && (
+          <LinearProgress
+            aria-label="Updating messages"
+            sx={{ position: "absolute", left: 0, right: 0, bottom: -1, height: 2 }}
+          />
         )}
       </Stack>
 

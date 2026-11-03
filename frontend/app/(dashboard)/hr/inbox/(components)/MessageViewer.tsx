@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Avatar,
   Box,
+  Button,
   ButtonBase,
   Chip,
   Divider,
@@ -18,49 +20,57 @@ import {
 import {
   ArchiveOutlined,
   ArrowBack,
+  DeleteForeverOutlined,
   DeleteOutlined,
   Forward,
-  LabelOutlined,
   MarkEmailUnreadOutlined,
   MoreVert,
-  PrintOutlined,
   Reply,
   ReplyAll,
+  RestoreFromTrash,
   Star,
   StarBorder,
 } from "@mui/icons-material";
-import { INBOX_COLORS, LABELS } from "../(constants)/inbox.constants";
-import type { Attachment, InboxMessage, InboxThread } from "../(types)/inbox.types";
+import type { EmailMessage, InboxThread } from "@/lib/types/inbox";
+import { useAppSelector } from "@/lib/store/hooks";
+import { INBOX_COLORS, LABELS, MARK_READ_DELAY_MS, isKnownLabel } from "../(constants)/inbox.constants";
+import type { FolderId } from "../(types)/inbox.types";
 import {
-  formatContact,
   formatFullDateTime,
   formatListTime,
   getAvatarColor,
   getCounterpart,
-  getFirstName,
   getInitials,
-  getPreview,
-  getThreadCandidate,
+  getMessageTime,
+  isThreadStarred,
+  type ReplyMode,
 } from "../(utils)/inbox.utils";
 import AttachmentCard from "./AttachmentCard";
 import CandidateInfoCard from "./CandidateInfoCard";
+import EmailBody from "./EmailBody";
 import { LabelDot } from "./FolderList";
 import QuickReply from "./QuickReply";
-import ScheduleInterviewDialog from "./ScheduleInterviewDialog";
 
-export type ReplyMode = "reply" | "replyAll" | "forward";
+export type ThreadMove = "archive" | "trash" | "restore";
 
 type MessageViewerProps = {
   thread: InboxThread;
+  /** The folder it was opened from; decides Restore vs Archive/Trash. */
+  folder: FolderId;
+  canSend: boolean;
   /** Mobile/tablet single-pane mode: back to the list. */
   onBack?: () => void;
-  onCompose: (mode: ReplyMode, message: InboxMessage, body?: string) => void;
-  onArchive: (threadId: string) => void;
-  onDelete: (threadId: string) => void;
-  onToggleStar: (threadId: string) => void;
-  onMarkUnread: (threadId: string) => void;
-  /** Shows a toast; used for actions that are design-only for now. */
-  onNotify: (message: string) => void;
+  onCompose: (mode: ReplyMode, message: EmailMessage, body?: string) => void;
+  onMove: (action: ThreadMove) => void;
+  /** Trash only; the caller confirms first. */
+  onDeleteForever: () => void;
+  onToggleStar: (starred: boolean) => void;
+  onMarkUnread: () => void;
+  /** Called once the thread has been open for a moment. */
+  onMarkRead: () => void;
+  onQuickReply: (body: string) => Promise<boolean>;
+  isSendingQuickReply: boolean;
+  onRetrySend: (messageId: string) => void;
 };
 
 const actionSx = {
@@ -68,24 +78,43 @@ const actionSx = {
   "&:hover": { color: INBOX_COLORS.primary, bgcolor: INBOX_COLORS.hover },
 } as const;
 
-/** Mount with `key={thread.id}` so expanded messages reset per thread. */
+const senderOf = (message: EmailMessage) => message.fromName || message.fromEmail;
+
+/** Mount with `key={thread.threadId}` so expanded messages reset per thread. */
 export default function MessageViewer({
   thread,
+  folder,
+  canSend,
   onBack,
   onCompose,
-  onArchive,
-  onDelete,
+  onMove,
+  onDeleteForever,
   onToggleStar,
   onMarkUnread,
-  onNotify,
+  onMarkRead,
+  onQuickReply,
+  isSendingQuickReply,
+  onRetrySend,
 }: Readonly<MessageViewerProps>) {
+  const userEmail = useAppSelector((state) => state.user.currentUser?.email);
   const latest = thread.messages[thread.messages.length - 1];
-  const candidate = getThreadCandidate(thread);
   const counterpart = getCounterpart(thread);
+  const starred = isThreadStarred(thread);
+  const inTrash = folder === "trash";
+  const canRestore = inTrash || folder === "archived";
   // Only the latest message starts expanded.
-  const [expandedIds, setExpandedIds] = useState(() => new Set([latest.id]));
+  const [expandedIds, setExpandedIds] = useState(() => new Set(latest ? [latest.id] : []));
   const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
+
+  // Mark read after the thread has been open briefly, not on a quick skim.
+  const markReadRef = useRef(onMarkRead);
+  useEffect(() => {
+    markReadRef.current = onMarkRead;
+  }, [onMarkRead]);
+  useEffect(() => {
+    const timer = setTimeout(() => markReadRef.current(), MARK_READ_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [thread.threadId]);
 
   const toggleExpanded = (messageId: string) =>
     setExpandedIds((current) => {
@@ -95,16 +124,25 @@ export default function MessageViewer({
       return next;
     });
 
-  const downloadAttachment = (attachment: Attachment) =>
-    onNotify(`Download of ${attachment.fileName} isn't connected yet.`);
+  if (!latest) return null;
 
   const actions = [
-    { label: "Reply", icon: <Reply />, onClick: () => onCompose("reply", latest) },
-    { label: "Reply all", icon: <ReplyAll />, onClick: () => onCompose("replyAll", latest) },
-    { label: "Forward", icon: <Forward />, onClick: () => onCompose("forward", latest) },
-    { label: "Archive", icon: <ArchiveOutlined />, onClick: () => onArchive(thread.id) },
-    { label: "Delete", icon: <DeleteOutlined />, onClick: () => onDelete(thread.id) },
+    ...(canSend
+      ? [
+          { label: "Reply", icon: <Reply />, onClick: () => onCompose("reply", latest) },
+          { label: "Reply all", icon: <ReplyAll />, onClick: () => onCompose("replyAll", latest) },
+          { label: "Forward", icon: <Forward />, onClick: () => onCompose("forward", latest) },
+        ]
+      : []),
+    ...(canRestore
+      ? [{ label: "Restore", icon: <RestoreFromTrash />, onClick: () => onMove("restore") }]
+      : [{ label: "Archive", icon: <ArchiveOutlined />, onClick: () => onMove("archive") }]),
+    inTrash
+      ? { label: "Delete forever", icon: <DeleteForeverOutlined />, onClick: onDeleteForever }
+      : { label: "Delete", icon: <DeleteOutlined />, onClick: () => onMove("trash") },
   ];
+
+  const labels = thread.labels.filter(isKnownLabel);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", height: "100%", minWidth: 0 }}>
@@ -135,14 +173,14 @@ export default function MessageViewer({
           </Tooltip>
         ))}
         <Box sx={{ flex: 1 }} />
-        <Tooltip title={thread.isStarred ? "Unstar" : "Star"}>
+        <Tooltip title={starred ? "Unstar" : "Star"}>
           <IconButton
-            aria-label={thread.isStarred ? "Unstar conversation" : "Star conversation"}
-            aria-pressed={thread.isStarred}
-            onClick={() => onToggleStar(thread.id)}
-            sx={{ color: thread.isStarred ? "#f5b400" : INBOX_COLORS.muted }}
+            aria-label={starred ? "Unstar conversation" : "Star conversation"}
+            aria-pressed={starred}
+            onClick={() => onToggleStar(!starred)}
+            sx={{ color: starred ? "#f5b400" : INBOX_COLORS.muted }}
           >
-            {thread.isStarred ? <Star /> : <StarBorder />}
+            {starred ? <Star /> : <StarBorder />}
           </IconButton>
         </Tooltip>
         <Tooltip title="More">
@@ -166,30 +204,24 @@ export default function MessageViewer({
           <MenuItem
             onClick={() => {
               setMoreAnchor(null);
-              onMarkUnread(thread.id);
+              onMarkUnread();
             }}
           >
             <ListItemIcon><MarkEmailUnreadOutlined fontSize="small" /></ListItemIcon>
             Mark as unread
           </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setMoreAnchor(null);
-              onNotify("Labels can't be edited yet.");
-            }}
-          >
-            <ListItemIcon><LabelOutlined fontSize="small" /></ListItemIcon>
-            Change labels
-          </MenuItem>
-          <MenuItem
-            onClick={() => {
-              setMoreAnchor(null);
-              onNotify("Printing isn't connected yet.");
-            }}
-          >
-            <ListItemIcon><PrintOutlined fontSize="small" /></ListItemIcon>
-            Print
-          </MenuItem>
+          {!canRestore && (
+            <MenuItem
+              onClick={() => {
+                setMoreAnchor(null);
+                onMove("restore");
+              }}
+              disabled={folder === "inbox"}
+            >
+              <ListItemIcon><RestoreFromTrash fontSize="small" /></ListItemIcon>
+              Restore to Inbox
+            </MenuItem>
+          )}
         </Menu>
       </Stack>
 
@@ -199,10 +231,10 @@ export default function MessageViewer({
           component="h2"
           sx={{ fontWeight: 700, fontSize: { xs: "1.15rem", md: "1.35rem" }, color: INBOX_COLORS.heading, lineHeight: 1.3 }}
         >
-          {thread.subject}
+          {thread.subject || "(no subject)"}
         </Typography>
         <Stack direction="row" spacing={0.8} sx={{ mt: 1, mb: 2, flexWrap: "wrap", rowGap: 0.8 }}>
-          {thread.labels.map((labelId) => (
+          {labels.map((labelId) => (
             <Chip
               key={labelId}
               size="small"
@@ -217,9 +249,9 @@ export default function MessageViewer({
           ))}
         </Stack>
 
-        {candidate && (
+        {thread.candidate && (
           <Box sx={{ mb: 2.5 }}>
-            <CandidateInfoCard candidate={candidate} onScheduleInterview={() => setScheduleOpen(true)} />
+            <CandidateInfoCard candidate={thread.candidate} />
           </Box>
         )}
 
@@ -229,9 +261,11 @@ export default function MessageViewer({
               <ExpandedMessage
                 key={message.id}
                 message={message}
+                userEmail={userEmail}
                 collapsible={message.id !== latest.id}
+                canSend={canSend}
                 onCollapse={() => toggleExpanded(message.id)}
-                onDownload={downloadAttachment}
+                onRetry={() => onRetrySend(message.id)}
               />
             ) : (
               <CollapsedMessage key={message.id} message={message} onExpand={() => toggleExpanded(message.id)} />
@@ -240,28 +274,20 @@ export default function MessageViewer({
         </Stack>
       </Box>
 
-      {thread.folder !== "drafts" && thread.folder !== "trash" && (
+      {canSend && folder !== "drafts" && !inTrash && (
         <QuickReply
+          threadId={thread.threadId}
           recipientName={counterpart.name}
-          recipientFirstName={getFirstName(counterpart.email)}
-          onSend={() => onNotify("Preview only: sending isn't connected yet.")}
+          isSending={isSendingQuickReply}
+          onSend={onQuickReply}
           onExpand={(body) => onCompose("reply", latest, body)}
-        />
-      )}
-
-      {candidate && scheduleOpen && (
-        <ScheduleInterviewDialog
-          open
-          candidateName={candidate.name}
-          onClose={() => setScheduleOpen(false)}
-          onSchedule={(summary) => onNotify(`Preview only: ${summary} not saved.`)}
         />
       )}
     </Box>
   );
 }
 
-function MessageHeaderAvatar({ message }: Readonly<{ message: InboxMessage }>) {
+function MessageHeaderAvatar({ message }: Readonly<{ message: EmailMessage }>) {
   return (
     <Avatar
       sx={{
@@ -269,10 +295,10 @@ function MessageHeaderAvatar({ message }: Readonly<{ message: InboxMessage }>) {
         height: 40,
         fontSize: "0.9rem",
         fontWeight: 700,
-        bgcolor: getAvatarColor(message.from.email),
+        bgcolor: getAvatarColor(message.fromEmail),
       }}
     >
-      {getInitials(message.from.name)}
+      {getInitials(senderOf(message))}
     </Avatar>
   );
 }
@@ -280,12 +306,12 @@ function MessageHeaderAvatar({ message }: Readonly<{ message: InboxMessage }>) {
 function CollapsedMessage({
   message,
   onExpand,
-}: Readonly<{ message: InboxMessage; onExpand: () => void }>) {
+}: Readonly<{ message: EmailMessage; onExpand: () => void }>) {
   return (
     <ButtonBase
       onClick={onExpand}
       aria-expanded={false}
-      aria-label={`Expand message from ${message.from.name}`}
+      aria-label={`Expand message from ${senderOf(message)}`}
       sx={{
         display: "flex",
         alignItems: "center",
@@ -303,32 +329,44 @@ function CollapsedMessage({
       <MessageHeaderAvatar message={message} />
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography noWrap sx={{ fontSize: "0.9rem", fontWeight: 700, color: INBOX_COLORS.text }}>
-          {message.from.name}
+          {senderOf(message)}
         </Typography>
         <Typography noWrap variant="body2" sx={{ color: INBOX_COLORS.muted }}>
-          {getPreview(message)}
+          {message.bodyText.replace(/\s+/g, " ").trim()}
         </Typography>
       </Box>
       <Typography variant="caption" sx={{ color: INBOX_COLORS.muted, flexShrink: 0 }}>
-        {formatListTime(message.sentAt)}
+        {formatListTime(getMessageTime(message))}
       </Typography>
     </ButtonBase>
   );
 }
 
+const STATUS_CHIPS: Partial<Record<EmailMessage["status"], { label: string; color: string; bg: string }>> = {
+  Sending: { label: "Sending…", color: "#1f80b6", bg: "#e8f3fc" },
+  Draft: { label: "Draft", color: "#e53935", bg: "#fdecec" },
+};
+
 function ExpandedMessage({
   message,
+  userEmail,
   collapsible,
+  canSend,
   onCollapse,
-  onDownload,
+  onRetry,
 }: Readonly<{
-  message: InboxMessage;
+  message: EmailMessage;
+  userEmail?: string;
   collapsible: boolean;
+  canSend: boolean;
   onCollapse: () => void;
-  onDownload: (attachment: Attachment) => void;
+  onRetry: () => void;
 }>) {
-  const recipients = message.to.map(formatContact).join(", ");
-  const cc = message.cc?.map(formatContact).join(", ");
+  const formatAddress = (email: string) =>
+    userEmail && email.toLowerCase() === userEmail.toLowerCase() ? "me" : email;
+  const recipients = message.toEmails.map(formatAddress).join(", ");
+  const cc = message.ccEmails.map(formatAddress).join(", ");
+  const statusChip = STATUS_CHIPS[message.status];
 
   const header = (
     <>
@@ -336,20 +374,29 @@ function ExpandedMessage({
       <Box sx={{ flex: 1, minWidth: 0 }}>
         <Typography sx={{ fontSize: "0.92rem", color: INBOX_COLORS.text }} noWrap>
           <Box component="span" sx={{ fontWeight: 700, color: INBOX_COLORS.heading }}>
-            {message.from.name}
+            {senderOf(message)}
           </Box>{" "}
           <Box component="span" sx={{ color: INBOX_COLORS.muted, fontSize: "0.82rem" }}>
-            &lt;{message.from.email}&gt;
+            &lt;{message.fromEmail}&gt;
           </Box>
         </Typography>
         <Typography variant="body2" noWrap sx={{ color: INBOX_COLORS.muted }}>
-          to {recipients}
+          to {recipients || "—"}
           {cc && `, cc ${cc}`}
         </Typography>
       </Box>
-      <Typography variant="caption" sx={{ color: INBOX_COLORS.muted, flexShrink: 0, textAlign: "right" }}>
-        {formatFullDateTime(message.sentAt)}
-      </Typography>
+      <Stack sx={{ alignItems: "flex-end", flexShrink: 0 }} spacing={0.5}>
+        <Typography variant="caption" sx={{ color: INBOX_COLORS.muted, textAlign: "right" }}>
+          {formatFullDateTime(getMessageTime(message))}
+        </Typography>
+        {statusChip && (
+          <Chip
+            size="small"
+            label={statusChip.label}
+            sx={{ height: 20, fontSize: "0.7rem", fontWeight: 700, color: statusChip.color, bgcolor: statusChip.bg }}
+          />
+        )}
+      </Stack>
     </>
   );
 
@@ -359,7 +406,7 @@ function ExpandedMessage({
         <ButtonBase
           onClick={onCollapse}
           aria-expanded
-          aria-label={`Collapse message from ${message.from.name}`}
+          aria-label={`Collapse message from ${senderOf(message)}`}
           sx={{
             display: "flex",
             alignItems: "flex-start",
@@ -379,14 +426,28 @@ function ExpandedMessage({
       )}
 
       <Box sx={{ pl: { xs: 0, sm: 6.5 }, pt: 1.5 }}>
-        {message.body.split(/\n{2,}/).map((paragraph, index) => (
-          <Typography
-            key={index}
-            sx={{ fontSize: "0.92rem", color: INBOX_COLORS.text, lineHeight: 1.7, whiteSpace: "pre-line", mb: 1.5 }}
+        {message.status === "Failed" && (
+          <Alert
+            severity="error"
+            sx={{ mb: 1.5, borderRadius: 2 }}
+            action={
+              canSend ? (
+                <Button color="inherit" size="small" onClick={onRetry} sx={{ fontWeight: 700 }}>
+                  Retry
+                </Button>
+              ) : undefined
+            }
           >
-            {paragraph}
-          </Typography>
-        ))}
+            <Box component="span" sx={{ fontWeight: 700 }}>Failed to send</Box>
+            {message.errorMessage && (
+              <Box component="span" sx={{ display: "block" }}>
+                {message.errorMessage}
+              </Box>
+            )}
+          </Alert>
+        )}
+
+        <EmailBody html={message.bodyHtml} />
 
         {message.attachments.length > 0 && (
           <Box sx={{ mt: 1 }}>
@@ -395,7 +456,7 @@ function ExpandedMessage({
             </Typography>
             <Stack direction="row" sx={{ flexWrap: "wrap", gap: 1.2 }}>
               {message.attachments.map((attachment) => (
-                <AttachmentCard key={attachment.id} attachment={attachment} onDownload={onDownload} />
+                <AttachmentCard key={attachment.id} attachment={attachment} />
               ))}
             </Stack>
           </Box>

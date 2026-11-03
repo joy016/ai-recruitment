@@ -9,47 +9,36 @@ import {
   Typography,
 } from "@mui/material";
 import { AttachFile, Star, StarBorder } from "@mui/icons-material";
-import { INBOX_COLORS } from "../(constants)/inbox.constants";
-import type { InboxThread } from "../(types)/inbox.types";
-import {
-  formatListTime,
-  getAvatarColor,
-  getCounterpart,
-  getInitials,
-  getLatestMessage,
-  getPreview,
-  getThreadCandidate,
-  threadHasAttachments,
-} from "../(utils)/inbox.utils";
+import type { InboxThreadListItem } from "@/lib/types/inbox";
+import { INBOX_COLORS, LABELS, isKnownLabel } from "../(constants)/inbox.constants";
+import { formatListTime, getAvatarColor, getInitials } from "../(utils)/inbox.utils";
 import CandidateStatusChip from "./CandidateStatusChip";
+import { LabelDot } from "./FolderList";
 
 type MessageListItemProps = {
-  thread: InboxThread;
+  thread: InboxThreadListItem;
   selected: boolean;
   checked: boolean;
-  /** Sent and Drafts show the recipient instead of the sender. */
-  showRecipient: boolean;
+  isDraft: boolean;
   onOpen: (threadId: string) => void;
   onToggleCheck: (threadId: string) => void;
-  onToggleStar: (threadId: string) => void;
+  onToggleStar: (threadId: string, starred: boolean) => void;
 };
 
 export default function MessageListItem({
   thread,
   selected,
   checked,
-  showRecipient,
+  isDraft,
   onOpen,
   onToggleCheck,
   onToggleStar,
 }: Readonly<MessageListItemProps>) {
-  const latest = getLatestMessage(thread);
-  const counterpart = showRecipient ? (latest.to[0] ?? latest.from) : getCounterpart(thread);
-  const candidate = getThreadCandidate(thread);
-  const hasAttachments = threadHasAttachments(thread);
-  const isDraft = thread.folder === "drafts";
-  const unread = thread.isUnread;
-  const count = thread.messages.length;
+  const senderName = thread.senderName || thread.senderEmail;
+  const subject = thread.subject || "(no subject)";
+  const unread = thread.unreadCount > 0;
+  const count = thread.messageCount;
+  const labels = thread.labels.filter(isKnownLabel);
 
   return (
     <Box
@@ -83,15 +72,15 @@ export default function MessageListItem({
       <Checkbox
         size="small"
         checked={checked}
-        onChange={() => onToggleCheck(thread.id)}
-        slotProps={{ input: { "aria-label": `Select "${thread.subject}"` } }}
+        onChange={() => onToggleCheck(thread.threadId)}
+        slotProps={{ input: { "aria-label": `Select "${subject}"` } }}
         sx={{ mt: 1.3, color: "#9bb7c9" }}
       />
 
       <ButtonBase
-        onClick={() => onOpen(thread.id)}
+        onClick={() => onOpen(thread.threadId)}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${unread ? "Unread. " : ""}${counterpart.name}: ${thread.subject}`}
+        aria-label={`${unread ? "Unread. " : ""}${senderName}: ${subject}`}
         sx={{
           flex: 1,
           minWidth: 0,
@@ -115,10 +104,10 @@ export default function MessageListItem({
               height: 38,
               fontSize: "0.85rem",
               fontWeight: 700,
-              bgcolor: getAvatarColor(counterpart.email),
+              bgcolor: getAvatarColor(thread.senderEmail),
             }}
           >
-            {getInitials(counterpart.name)}
+            {getInitials(senderName)}
           </Avatar>
           {unread && (
             <Box
@@ -154,7 +143,7 @@ export default function MessageListItem({
                   Draft
                 </Box>
               )}
-              {showRecipient ? `To: ${counterpart.name}` : counterpart.name}
+              {senderName}
               {count > 1 && (
                 <Box component="span" sx={{ color: INBOX_COLORS.muted, fontWeight: 500, ml: 0.6 }}>
                   {count}
@@ -169,7 +158,7 @@ export default function MessageListItem({
                 color: unread ? INBOX_COLORS.primary : INBOX_COLORS.muted,
               }}
             >
-              {formatListTime(latest.sentAt)}
+              {formatListTime(thread.lastActivityAt)}
             </Typography>
           </Stack>
 
@@ -182,17 +171,36 @@ export default function MessageListItem({
               mt: 0.2,
             }}
           >
-            {thread.subject}
+            {subject}
           </Typography>
 
           <Typography noWrap variant="body2" sx={{ color: INBOX_COLORS.muted, fontSize: "0.82rem" }}>
-            {getPreview(latest)}
+            {thread.preview}
           </Typography>
 
-          {candidate && (
-            <Box sx={{ mt: 0.7 }}>
-              <CandidateStatusChip status={candidate.status} compact />
-            </Box>
+          {(thread.candidate || labels.length > 0) && (
+            <Stack direction="row" spacing={0.6} sx={{ mt: 0.7, alignItems: "center", flexWrap: "wrap", rowGap: 0.5 }}>
+              {thread.candidate && <CandidateStatusChip status={thread.candidate.status} compact />}
+              {labels.map((labelId) => (
+                <Stack
+                  key={labelId}
+                  direction="row"
+                  spacing={0.5}
+                  sx={{
+                    alignItems: "center",
+                    px: 0.8,
+                    height: 20,
+                    borderRadius: 999,
+                    bgcolor: `${LABELS[labelId].color}14`,
+                  }}
+                >
+                  <LabelDot color={LABELS[labelId].color} size={6} />
+                  <Typography component="span" sx={{ fontSize: "0.7rem", fontWeight: 600, color: INBOX_COLORS.text }}>
+                    {LABELS[labelId].label}
+                  </Typography>
+                </Stack>
+              ))}
+            </Stack>
           )}
         </Box>
       </ButtonBase>
@@ -201,15 +209,15 @@ export default function MessageListItem({
         <Tooltip title={thread.isStarred ? "Unstar" : "Star"}>
           <IconButton
             size="small"
-            aria-label={thread.isStarred ? `Unstar "${thread.subject}"` : `Star "${thread.subject}"`}
+            aria-label={thread.isStarred ? `Unstar "${subject}"` : `Star "${subject}"`}
             aria-pressed={thread.isStarred}
-            onClick={() => onToggleStar(thread.id)}
+            onClick={() => onToggleStar(thread.threadId, !thread.isStarred)}
             sx={{ color: thread.isStarred ? "#f5b400" : "#9bb7c9" }}
           >
             {thread.isStarred ? <Star fontSize="small" /> : <StarBorder fontSize="small" />}
           </IconButton>
         </Tooltip>
-        {hasAttachments && (
+        {thread.hasAttachments && (
           <Tooltip title="Has attachments">
             <AttachFile
               aria-label="Has attachments"

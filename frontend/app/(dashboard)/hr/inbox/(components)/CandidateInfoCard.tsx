@@ -6,14 +6,13 @@ import {
   WorkOutlined,
   WorkspacePremiumOutlined,
 } from "@mui/icons-material";
+import type { CandidateCard } from "@/lib/types/inbox";
 import { INBOX_COLORS } from "../(constants)/inbox.constants";
-import type { MockCandidate } from "../(types)/inbox.types";
 import { formatSchedule, getAvatarColor, getInitials } from "../(utils)/inbox.utils";
 import CandidateStatusChip from "./CandidateStatusChip";
 
 type CandidateInfoCardProps = {
-  candidate: MockCandidate;
-  onScheduleInterview: () => void;
+  candidate: CandidateCard;
 };
 
 function Detail({
@@ -38,10 +37,11 @@ function Detail({
   );
 }
 
-export default function CandidateInfoCard({
-  candidate,
-  onScheduleInterview,
-}: Readonly<CandidateInfoCardProps>) {
+/**
+ * Read-only snapshot from GET /api/inbox/threads/:id. Status and interview
+ * dates are edited only in Candidates; View Profile is the only action.
+ */
+export default function CandidateInfoCard({ candidate }: Readonly<CandidateInfoCardProps>) {
   return (
     <Box
       component="section"
@@ -59,17 +59,17 @@ export default function CandidateInfoCard({
             width: 44,
             height: 44,
             fontWeight: 700,
-            bgcolor: getAvatarColor(candidate.email),
+            bgcolor: getAvatarColor(candidate.id),
           }}
         >
-          {getInitials(candidate.name)}
+          {getInitials(candidate.fullName)}
         </Avatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="overline" sx={{ color: INBOX_COLORS.muted, fontWeight: 700, lineHeight: 1.4 }}>
             Candidate
           </Typography>
           <Typography noWrap sx={{ fontWeight: 700, color: INBOX_COLORS.heading }}>
-            {candidate.name}
+            {candidate.fullName}
           </Typography>
         </Box>
         <CandidateStatusChip status={candidate.status} />
@@ -83,11 +83,15 @@ export default function CandidateInfoCard({
           mb: 1.5,
         }}
       >
-        <Detail icon={<WorkOutlined fontSize="small" />} label="Applied for" value={candidate.jobTitle} />
+        <Detail
+          icon={<WorkOutlined fontSize="small" />}
+          label="Applied for"
+          value={candidate.jobAppliedFor || "—"}
+        />
         <Detail
           icon={<WorkspacePremiumOutlined fontSize="small" />}
           label="Experience"
-          value={`${candidate.yearsOfExperience} years`}
+          value={`${candidate.yearsOfExperience} year${candidate.yearsOfExperience === 1 ? "" : "s"}`}
         />
         <Detail
           icon={<EventAvailableOutlined fontSize="small" />}
@@ -96,28 +100,13 @@ export default function CandidateInfoCard({
         />
       </Box>
 
-      <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
-        <Button
-          size="small"
-          variant="contained"
-          startIcon={<EventAvailableOutlined />}
-          onClick={onScheduleInterview}
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            borderRadius: 2,
-            bgcolor: INBOX_COLORS.primary,
-            boxShadow: "none",
-          }}
-        >
-          Schedule Interview
-        </Button>
-        {/* TODO(wire-up): link to /hr/candidates/profile/{id} once real ids are used. */}
+      <Box>
         <Button
           size="small"
           variant="outlined"
           component={Link}
-          href="/hr/candidates"
+          href={`/hr/candidates?candidateId=${encodeURIComponent(candidate.id)}`}
+          aria-label={`View ${candidate.fullName}'s profile`}
           endIcon={<OpenInNew sx={{ fontSize: "16px !important" }} />}
           sx={{
             textTransform: "none",
@@ -129,7 +118,7 @@ export default function CandidateInfoCard({
         >
           View Profile
         </Button>
-      </Stack>
+      </Box>
     </Box>
   );
 }
