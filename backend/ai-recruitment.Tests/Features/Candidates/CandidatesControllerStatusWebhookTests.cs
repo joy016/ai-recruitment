@@ -42,6 +42,7 @@ namespace ai_recruitment.Tests.Features.Candidates
         private class NoOpSupabaseStorageService : ISupabaseStorageService
         {
             public string ResumeBucket => "resume";
+            public string EmailAttachmentBucket => "email-attachments";
             public int ResumeSignedUrlExpirationSeconds => 900;
             public Task<string> UploadAsync(string bucket, string path, Stream content, string contentType) => Task.FromResult(string.Empty);
             public Task<string> CreateSignedUrlAsync(string bucket, string path, int expiresInSeconds) => Task.FromResult(string.Empty);

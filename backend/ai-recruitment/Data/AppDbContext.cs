@@ -2,6 +2,7 @@
 using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
 using ai_recruitment.Features.Departments.Model;
+using ai_recruitment.Features.Inbox.Model;
 using ai_recruitment.Features.JobPosts.Model;
 using ai_recruitment.Features.Notifications.Model;
 using ai_recruitment.Features.Permissions.Model;
@@ -35,6 +36,10 @@ namespace ai_recruitment.Data
         public DbSet<CandidateStatusWebhookOutbox> CandidateStatusWebhookOutboxEntries => Set<CandidateStatusWebhookOutbox>();
         public DbSet<Notification> Notifications => Set<Notification>();
         public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+        public DbSet<EmailMessage> EmailMessages => Set<EmailMessage>();
+        public DbSet<EmailAttachment> EmailAttachments => Set<EmailAttachment>();
+        public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
+        public DbSet<EmailAuditLog> EmailAuditLogs => Set<EmailAuditLog>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -182,6 +187,72 @@ namespace ai_recruitment.Data
                 .WithMany()
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // --- HR Inbox (plain email feature; never touches Candidate rows) ---
+
+            modelBuilder.Entity<EmailMessage>()
+                .Property(m => m.Direction)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<EmailMessage>()
+                .Property(m => m.Status)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasOne(m => m.SentByUser)
+                .WithMany()
+                .HasForeignKey(m => m.SentByUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => m.GmailMessageId)
+                .IsUnique();
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => m.ThreadId);
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => m.GmailThreadId);
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => m.CreatedAt);
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => m.FromEmail);
+
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => new { m.IsDeleted, m.IsArchived, m.Status });
+
+            // Dispatcher sweep - same shape as CandidateStatusWebhookOutbox's index.
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => new { m.Status, m.NextAttemptAt });
+
+            // InboxReceiveNotifyDispatcher's sweep - same AttemptCount/NextAttemptAt/ClaimedAt
+            // columns as the send-dispatcher index above, scoped to inbound messages instead.
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => new { m.Direction, m.N8nNotifiedAt, m.NextAttemptAt });
+
+            // Lets a double POST /api/inbox/send with the same Idempotency-Key from the same
+            // sender resolve to the single message already created instead of sending twice.
+            modelBuilder.Entity<EmailMessage>()
+                .HasIndex(m => new { m.SentByUserId, m.IdempotencyKey })
+                .IsUnique();
+
+            modelBuilder.Entity<EmailAttachment>()
+                .HasOne(a => a.Message)
+                .WithMany(m => m.Attachments)
+                .HasForeignKey(a => a.MessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<EmailAttachment>()
+                .HasIndex(a => a.MessageId);
+
+            modelBuilder.Entity<EmailTemplate>()
+                .HasIndex(t => t.Key)
+                .IsUnique();
+
+            modelBuilder.Entity<EmailAuditLog>()
+                .HasIndex(l => l.MessageId);
 
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(

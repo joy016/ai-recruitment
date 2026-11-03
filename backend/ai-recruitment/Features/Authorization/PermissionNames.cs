@@ -39,6 +39,17 @@ namespace ai_recruitment.Features.Authorization
             public const string ManageSystemSettings = "settings.manageSystemSettings";
         }
 
+        // HR Inbox (plain email feature - never grants any Candidate write access).
+        // Deliberately NOT included in `All`/`RolePermissionMap` in PermissionSeedData -
+        // see PermissionSeedData.InboxPermissionRoleMap for why (keeps every pre-existing
+        // seeded Permission row's id stable across this migration).
+        public static class Inbox
+        {
+            public const string View = "inbox.view";
+            public const string Send = "inbox.send";
+            public const string ManageTemplates = "inbox.manageTemplates";
+        }
+
         public static readonly IReadOnlyList<string> All = new[]
         {
             Candidates.View, Candidates.Create, Candidates.Edit, Candidates.Delete,
@@ -46,6 +57,15 @@ namespace ai_recruitment.Features.Authorization
             Interviews.View, Interviews.Schedule, Interviews.Reschedule,
             Accounts.View, Accounts.Manage,
             Settings.View, Settings.ManageSystemSettings
+        };
+
+        // The full catalog including Inbox permissions - used wherever code needs to validate
+        // or list every assignable permission (e.g. RolePermissionService). Kept separate from
+        // `All` so PermissionSeedData's Super Admin role mapping (which uses `All`) doesn't
+        // shift every subsequent role's seeded PermissionId - see PermissionSeedData.
+        public static readonly IReadOnlyList<string> Catalog = new List<string>(All)
+        {
+            Inbox.View, Inbox.Send, Inbox.ManageTemplates
         };
     }
 }

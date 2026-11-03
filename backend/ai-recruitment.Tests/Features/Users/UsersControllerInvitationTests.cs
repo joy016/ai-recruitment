@@ -16,6 +16,7 @@ namespace ai_recruitment.Tests.Features.Users
     public class FakeSupabaseStorageService : ISupabaseStorageService
     {
         public string ResumeBucket => "resume";
+        public string EmailAttachmentBucket => "email-attachments";
         public int ResumeSignedUrlExpirationSeconds => 900;
 
         public Task<string> UploadAsync(string bucket, string path, Stream content, string contentType) =>

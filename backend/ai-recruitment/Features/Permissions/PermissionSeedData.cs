@@ -63,6 +63,31 @@ namespace ai_recruitment.Features.Permissions
             },
         };
 
+        // Added when the HR Inbox module shipped. Kept out of RolePermissionMap/`All` and
+        // appended in a second pass (see Build()) specifically so every pre-existing
+        // Permission row above keeps the exact same PermissionId - inserting these into
+        // RolePermissionMap's dictionary order instead would shift every later role's
+        // sequential id and generate a migration that overwrites already-applied seed rows.
+        private static readonly DateTime InboxSeededAt = new(2026, 10, 30, 0, 0, 0, DateTimeKind.Utc);
+
+        private static readonly IReadOnlyDictionary<int, string[]> InboxPermissionRoleMap = new Dictionary<int, string[]>
+        {
+            // Super Admin
+            [1] = new[]
+            {
+                Authorization.PermissionNames.Inbox.View,
+                Authorization.PermissionNames.Inbox.Send,
+                Authorization.PermissionNames.Inbox.ManageTemplates,
+            },
+
+            // HR Admin - can view/send mail but not manage the template catalog
+            [2] = new[]
+            {
+                Authorization.PermissionNames.Inbox.View,
+                Authorization.PermissionNames.Inbox.Send,
+            },
+        };
+
         public static IReadOnlyList<Permission> Build()
         {
             var seed = new List<Permission>();
@@ -78,6 +103,20 @@ namespace ai_recruitment.Features.Permissions
                         PermissionName = permissionName,
                         RoleId = roleId,
                         CreatedAt = SeededAt,
+                    });
+                }
+            }
+
+            foreach (var (roleId, permissionNames) in InboxPermissionRoleMap)
+            {
+                foreach (var permissionName in permissionNames)
+                {
+                    seed.Add(new Permission
+                    {
+                        PermissionId = nextId++,
+                        PermissionName = permissionName,
+                        RoleId = roleId,
+                        CreatedAt = InboxSeededAt,
                     });
                 }
             }

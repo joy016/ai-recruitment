@@ -10,6 +10,11 @@ namespace ai_recruitment.Service
         // Private bucket resumes are uploaded into (see CandidatesController.CreateCandidate).
         public string ResumeBucket { get; set; } = "resume";
 
+        // Private bucket email attachments are uploaded into (see IEmailAttachmentStorage).
+        // Must be created in the Supabase dashboard first, same as ResumeBucket was - this
+        // service never creates buckets itself.
+        public string EmailAttachmentBucket { get; set; } = "email-attachments";
+
         // Default lifetime for a resume signed URL (see CreateSignedUrlAsync). Generated
         // fresh every time one is needed - never persisted - so this only bounds how long
         // a single use is valid for, e.g. while n8n fetches the file.
@@ -27,6 +32,7 @@ namespace ai_recruitment.Service
     public interface ISupabaseStorageService
     {
         string ResumeBucket { get; }
+        string EmailAttachmentBucket { get; }
         int ResumeSignedUrlExpirationSeconds { get; }
 
         // Returns the bucket's "public" URL for the uploaded object. Only meaningful for a
@@ -54,6 +60,7 @@ namespace ai_recruitment.Service
         private readonly ILogger<SupabaseStorageService> _logger;
 
         public string ResumeBucket => _options.ResumeBucket;
+        public string EmailAttachmentBucket => _options.EmailAttachmentBucket;
         public int ResumeSignedUrlExpirationSeconds => _options.SignedUrlExpirationSeconds;
 
         public SupabaseStorageService(HttpClient httpClient, IConfiguration configuration, ILogger<SupabaseStorageService> logger)

@@ -16,7 +16,7 @@ namespace ai_recruitment.Features.Roles
         // Canonicalizes a submitted name (case-insensitive) to the exact constant value,
         // and doubles as the "is this a known permission" check.
         private static readonly IReadOnlyDictionary<string, string> CanonicalPermissionNames =
-            PermissionNames.All.ToDictionary(p => p, p => p, StringComparer.OrdinalIgnoreCase);
+            PermissionNames.Catalog.ToDictionary(p => p, p => p, StringComparer.OrdinalIgnoreCase);
 
         private readonly AppDbContext _context;
         private readonly IPermissionService _permissionService;

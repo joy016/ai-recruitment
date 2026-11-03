@@ -2,6 +2,7 @@ using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates.Services;
+using ai_recruitment.Features.Inbox.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Services;
 using ai_recruitment.Features.Roles;
@@ -185,6 +186,71 @@ builder.Services.AddOptions<NotificationRetentionOptions>()
 builder.Services.AddHostedService<InterviewReminderBackgroundService>();
 builder.Services.AddHostedService<NotificationCleanupService>();
 
+// HR Inbox (plain email feature; never touches Candidate rows - see Features/Inbox).
+builder.Services.AddOptions<N8nEmailOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.WebhookUrl = configuration[N8nEmailOptions.EnvWebhookUrl]
+            ?? configuration["N8n:SendEmailWebhookUrl"];
+
+        options.SharedSecret = configuration[N8nEmailOptions.EnvSharedSecret]
+            ?? configuration["N8n:EmailSharedSecret"];
+
+        options.AppBaseUrl = configuration[N8nEmailOptions.EnvAppBaseUrl]
+            ?? configuration["App:BaseUrl"];
+
+        options.AllowInsecureHttp = builder.Environment.IsDevelopment();
+    });
+
+builder.Services.AddOptions<AnthropicOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.ApiKey = configuration[AnthropicOptions.EnvApiKey]
+            ?? configuration["Anthropic:ApiKey"];
+    });
+
+builder.Services.AddHttpClient<IN8nEmailWebhookService, N8nEmailWebhookService>((provider, client) =>
+{
+    var options = provider.GetRequiredService<IOptions<N8nEmailOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
+
+// Notifies n8n right after a new inbound email is saved, so a downstream workflow (AI
+// classification, resume parsing, etc) can run on it. Separate from N8nEmailOptions above
+// (that one is for outbound replies and n8n's callbacks into this app).
+builder.Services.AddOptions<N8nReceiveEmailOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.WebhookUrl = configuration[N8nReceiveEmailOptions.EnvWebhookUrl]
+            ?? configuration["N8n:ReceiveEmailWebhookUrl"];
+
+        options.WebhookSecret = configuration[N8nReceiveEmailOptions.EnvWebhookSecret]
+            ?? configuration["N8n:ReceiveEmailWebhookSecret"];
+
+        options.AllowInsecureHttp = builder.Environment.IsDevelopment();
+    });
+
+builder.Services.AddHttpClient<IN8nReceiveEmailWebhookService, N8nReceiveEmailWebhookService>((provider, client) =>
+{
+    var options = provider.GetRequiredService<IOptions<N8nReceiveEmailOptions>>().Value;
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+});
+
+builder.Services.AddSingleton<InboxReceiveNotifyChannel>();
+builder.Services.AddHostedService<InboxReceiveNotifyDispatcher>();
+
+builder.Services.AddSingleton<IHtmlSanitizerService, HtmlSanitizerService>();
+builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddScoped<IEmailAttachmentStorage, EmailAttachmentStorage>();
+builder.Services.AddScoped<IInboxCandidateLinkService, InboxCandidateLinkService>();
+builder.Services.AddScoped<IInboxQueryService, InboxQueryService>();
+builder.Services.AddScoped<IInboxMutationService, InboxMutationService>();
+builder.Services.AddScoped<IInboxSendService, InboxSendService>();
+builder.Services.AddScoped<IEmailAiService, AnthropicEmailAiService>();
+builder.Services.AddSingleton<InboxSendChannel>();
+builder.Services.AddSingleton<IInboxEventBroadcaster, InboxEventBroadcaster>();
+builder.Services.AddHostedService<InboxSendDispatcher>();
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -210,6 +276,18 @@ builder.Services.AddRateLimiter(options =>
         {
             Window = TimeSpan.FromHours(1),
             PermitLimit = 5,
+            QueueLimit = 0,
+        });
+    });
+
+    // POST /api/inbox/send: per authenticated caller.
+    options.AddPolicy(RateLimiterPolicies.InboxSend, httpContext =>
+    {
+        var callerId = httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(callerId, _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(1),
+            PermitLimit = 20,
             QueueLimit = 0,
         });
     });
@@ -257,6 +335,7 @@ var app = builder.Build();
 // Apply pending EF Core migrations on startup, retrying briefly so the app can
 // wait for the database to become reachable.
 ApplyMigrations(app);
+await SeedEmailTemplatesAsync(app);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -361,6 +440,13 @@ static string ConvertDatabaseUrlToNpgsqlConnectionString(string databaseUrl)
     return connectionStringBuilder.ConnectionString;
 }
 
+static async Task SeedEmailTemplatesAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+    var templates = scope.ServiceProvider.GetRequiredService<IEmailTemplateService>();
+    await templates.SeedDefaultsAsync(CancellationToken.None);
+}
+
 static void ApplyMigrations(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
@@ -372,6 +458,7 @@ static void ApplyMigrations(WebApplication app)
     {
         try
         {
+            db.Database.Migrate();
             return;
         }
         catch (Exception ex) when (attempt < maxAttempts)

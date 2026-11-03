@@ -1,0 +1,85 @@
+{
+  "name": "Receive Email",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": { "item": [{ "mode": "everyMinute" }] },
+        "simple": false,
+        "filters": { "labelIds": ["INBOX"] },
+        "options": { "downloadAttachments": true }
+      },
+      "id": "7a777777-aaaa-4aaa-8aaa-777777777777",
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [-120, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Polls INBOX every minute. 'Download Attachments' must be on so binary data is available for the Set node below to base64-encode - Gmail attachments have no URL this backend can fetch directly."
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
+        "assignments": {
+          "assignments": [
+            { "name": "gmailMessageId", "type": "string", "value": "={{ $json.id }}" },
+            { "name": "gmailThreadId", "type": "string", "value": "={{ $json.threadId }}" },
+            { "name": "fromName", "type": "string", "value": "={{ $json.headers.from.split('<')[0].trim() }}" },
+            { "name": "fromEmail", "type": "string", "value": "={{ ($json.headers.from.match(/<(.+)>/) || [,$json.headers.from])[1] }}" },
+            { "name": "to", "type": "array", "value": "={{ $json.headers.to.split(',').map(e => e.trim()) }}" },
+            { "name": "cc", "type": "array", "value": "={{ ($json.headers.cc || '').split(',').map(e => e.trim()).filter(e => e) }}" },
+            { "name": "subject", "type": "string", "value": "={{ $json.headers.subject }}" },
+            { "name": "bodyHtml", "type": "string", "value": "={{ $json.html || '' }}" },
+            { "name": "bodyText", "type": "string", "value": "={{ $json.text || '' }}" },
+            { "name": "receivedAt", "type": "string", "value": "={{ $json.date }}" },
+            {
+              "name": "attachments",
+              "type": "array",
+              "value": "={{ Object.keys($binary || {}).map(key => ({ filename: $binary[key].fileName, mimeType: $binary[key].mimeType, contentBase64: $binary[key].data })) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8b888888-bbbb-4bbb-8bbb-888888888888",
+      "name": "Shape fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [140, 300],
+      "notesInFlow": true,
+      "notes": "$binary[key].data is already base64 text in n8n's binary data model, so no extra encoding step is needed for contentBase64."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_BASE_URL }}/api/webhooks/n8n/inbound-email",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "x-webhook-secret", "value": "={{ $env.N8N_SHARED_SECRET }}" }]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "9c999999-cccc-4ccc-8ccc-999999999999",
+      "name": "POST inbound-email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "notesInFlow": true,
+      "notes": "APP_BASE_URL and N8N_SHARED_SECRET are n8n environment variables you set to the same values as this backend's .env - see backend README's Inbox section. If n8n runs in Docker, APP_BASE_URL must use host.docker.internal."
+    }
+  ],
+  "connections": {
+    "Gmail Trigger": { "main": [[{ "node": "Shape fields", "type": "main", "index": 0 }]] },
+    "Shape fields": { "main": [[{ "node": "POST inbound-email", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

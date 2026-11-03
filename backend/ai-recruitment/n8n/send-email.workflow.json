@@ -1,0 +1,164 @@
+{
+  "name": "Send Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "email-notification",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "1a111111-aaaa-4aaa-8aaa-111111111111",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-120, 300],
+      "webhookId": "email-notification",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Inbox Webhook Secret (x-webhook-secret)"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Header Auth credential must check the 'x-webhook-secret' header against N8N_SHARED_SECRET. 'Respond' is set to 'Immediately' so this backend's POST /api/inbox/send never waits on the actual Gmail send."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.replyTo }}",
+              "rightValue": "",
+              "operator": { "type": "object", "operation": "notEmpty" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2b222222-bbbb-4bbb-8bbb-222222222222",
+      "name": "IF replyTo exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [120, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "reply",
+        "messageId": "={{ $json.body.replyTo.gmailMessageId }}",
+        "emailType": "html",
+        "message": "={{ $json.body.bodyHtml }}",
+        "options": {
+          "ccList": "={{ $json.body.cc.join(',') }}",
+          "bccList": "={{ $json.body.bcc.join(',') }}",
+          "senderName": "={{ $json.body.senderName }}",
+          "attachmentsUi": {
+            "attachmentsBinary": []
+          }
+        }
+      },
+      "id": "3c333333-cccc-4ccc-8ccc-333333333333",
+      "name": "Gmail - Reply to a message",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [360, 180],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Attachments: for each item in body.attachments, download the URL (HTTP Request -> binary) upstream and reference it here, or switch this node's 'Attachments' field to pull from binary data prepared by an earlier HTTP Request node per attachment."
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "sendTo": "={{ $json.body.to.join(',') }}",
+        "subject": "={{ $json.body.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body.bodyHtml }}",
+        "options": {
+          "ccList": "={{ $json.body.cc.join(',') }}",
+          "bccList": "={{ $json.body.bcc.join(',') }}",
+          "senderName": "={{ $json.body.senderName }}",
+          "attachmentsUi": {
+            "attachmentsBinary": []
+          }
+        }
+      },
+      "id": "4d444444-dddd-4ddd-8ddd-444444444444",
+      "name": "Gmail - Send a message",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [360, 420],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REPLACE_WITH_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Subject is ALWAYS set explicitly from body.subject - never leave this blank, or Gmail will show '(No Subject)'."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body.callbackUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messageId: $('Webhook').item.json.body.messageId, success: true, gmailMessageId: $json.id, gmailThreadId: $json.threadId, sentAt: $now.toISO() }) }}",
+        "options": {}
+      },
+      "id": "5e555555-eeee-4eee-8eee-555555555555",
+      "name": "Callback - success",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Webhook').item.json.body.callbackUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messageId: $('Webhook').item.json.body.messageId, success: false, error: $json.error?.message || $json.message || 'Unknown Gmail send error' }) }}",
+        "options": {}
+      },
+      "id": "6f666666-ffff-4fff-8fff-666666666666",
+      "name": "Callback - failure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [360, 620]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "IF replyTo exists", "type": "main", "index": 0 }]] },
+    "IF replyTo exists": {
+      "main": [
+        [{ "node": "Gmail - Reply to a message", "type": "main", "index": 0 }],
+        [{ "node": "Gmail - Send a message", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail - Reply to a message": {
+      "main": [
+        [{ "node": "Callback - success", "type": "main", "index": 0 }],
+        [{ "node": "Callback - failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Gmail - Send a message": {
+      "main": [
+        [{ "node": "Callback - success", "type": "main", "index": 0 }],
+        [{ "node": "Callback - failure", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
