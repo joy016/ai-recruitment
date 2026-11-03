@@ -2,6 +2,7 @@ using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates.Services;
+using ai_recruitment.Features.Dashboard.Services;
 using ai_recruitment.Features.Inbox.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Services;
@@ -251,6 +252,17 @@ builder.Services.AddSingleton<InboxSendChannel>();
 builder.Services.AddSingleton<IInboxEventBroadcaster, InboxEventBroadcaster>();
 builder.Services.AddHostedService<InboxSendDispatcher>();
 
+// Recruitment Analytics dashboard (Features/Dashboard) - read-only aggregates over existing
+// Candidate/Job data, no new tables.
+builder.Services.AddOptions<DashboardOptions>()
+    .Configure<IConfiguration>((options, configuration) =>
+    {
+        options.TimeZoneId = configuration[DashboardOptions.EnvTimeZoneId]
+            ?? configuration["Dashboard:TimeZoneId"]
+            ?? options.TimeZoneId;
+    });
+builder.Services.AddSingleton(TimeProvider.System);
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -336,6 +348,19 @@ var app = builder.Build();
 // wait for the database to become reachable.
 ApplyMigrations(app);
 await SeedEmailTemplatesAsync(app);
+
+// Dev-only sample data for the Recruitment Analytics dashboard: `dotnet run -- seed-dashboard-data`.
+// Never runs as part of normal startup. See Data/DevDataSeeder.cs.
+if (args.Contains("seed-dashboard-data"))
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        await DevDataSeeder.SeedAsync(context);
+    }
+
+    return;
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
