@@ -193,6 +193,8 @@ export default function CandidateTable({
       disabled={savingApplicantId === candidate.id}
       slotProps={{
         htmlInput: {
+          // Past dates are disabled in the picker; page.tsx also rejects past times on save.
+          min: toDateTimeLocalValue(new Date().toISOString()),
           "aria-label": `Interview schedule for ${candidate.firstName} ${candidate.lastName}`,
         },
       }}

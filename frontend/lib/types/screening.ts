@@ -12,11 +12,15 @@ export interface ApplicantScreeningResponse {
   qualificationScore: number | null;
   matchedSkills: string[] | null;
   missingSkills: string[] | null;
-  /** Free text from n8n (max 200 chars), usually PASS / NEEDS_REVIEW / FAIL. */
+  /** PASS | FAIL | MANUAL_REVIEW (case-insensitive); null if the AI did not report one. */
   recommendation: string | null;
   summary: string | null;
   /** e.g. COMPLETED, MANUAL_REVIEW_REQUIRED, UNREADABLE_RESUME. */
   screeningStatus: string;
+  /** True if the AI agent itself flagged the result as needing a human look. */
+  requiresHumanReview: boolean;
+  /** Recruiter-facing reason this landed in Manual Review; null otherwise. */
+  manualReviewReason: string | null;
   screenedAt: string | null;
   createdAt: string;
   updatedAt: string | null;

@@ -21,6 +21,7 @@ export const getCandidateList = async (
   jobId?: number | string,
   pageNumber = 1,
   pageSize = 10,
+  statusId?: number,
 ): Promise<GetCandidatesResponse> => {
   const params = new URLSearchParams({
     pageNumber: String(pageNumber),
@@ -28,6 +29,9 @@ export const getCandidateList = async (
   });
   if (jobId) {
     params.set("jobId", String(jobId));
+  }
+  if (statusId) {
+    params.set("statusId", String(statusId));
   }
 
   return api.get<GetCandidatesResponse>(

@@ -21,10 +21,19 @@ export interface ResumeUrlResponse {
   contentType: string;
 }
 
+/**
+ * PUT /api/Candidates/updateCandidateStatus. Only the schedule and assignee
+ * for the target status are sent: interview steps use interviewSched and
+ * interviewerId; Job Offer and Onboarding use their own sched/facilitator.
+ */
 export interface UpdateStatusPayload {
   id: string;
   applicantStatusId: number;
-  interviewSched: string;
+  interviewSched?: string;
   interviewerId?: string;
+  jobOfferSched?: string;
+  jobOfferFacilitatorId?: string;
+  onboardingSched?: string;
+  onboardingFacilitatorId?: string;
   updatedAt: string;
 }

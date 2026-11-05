@@ -26,6 +26,7 @@ import {
   SCREENING_TONES,
   ScreeningToneName,
   getScreeningStatusConfig,
+  getManualReviewReasonConfig,
 } from "@/constant/screening";
 import { formatNumericDateTime } from "@/lib/utils/date";
 import RecommendationBadge from "./ai-screening/RecommendationBadge";
@@ -243,6 +244,32 @@ function ScreeningDetails({
           {statusConfig.message}
         </Alert>
       )}
+
+      {screening.manualReviewReason && (() => {
+        const reasonConfig = getManualReviewReasonConfig(screening.manualReviewReason);
+        const reasonTone = SCREENING_TONES[reasonConfig.tone];
+        return (
+          <Box
+            sx={{
+              ...cardSx,
+              bgcolor: reasonTone.bg,
+              borderColor: reasonTone.color,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Chip
+              label={reasonConfig.label}
+              size="small"
+              sx={{ bgcolor: reasonTone.color, color: "#ffffff", fontWeight: 600 }}
+            />
+            <Typography variant="body2" sx={{ color: "#264a66" }}>
+              {screening.manualReviewReason}
+            </Typography>
+          </Box>
+        );
+      })()}
 
       {statusConfig.showResult && (
         <Box

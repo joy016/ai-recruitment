@@ -1,8 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, SyntheticEvent, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
+  Badge,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -12,6 +14,8 @@ import {
   Paper,
   SelectChangeEvent,
   Snackbar,
+  Tab,
+  Tabs,
   Alert,
   TextField,
   Typography,
@@ -72,6 +76,12 @@ const toDateTimeLocalValue = (value: string | undefined) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 };
 
+// Earliest selectable schedule (now), so past dates are disabled in the picker.
+const getMinScheduleValue = () => toDateTimeLocalValue(new Date().toISOString());
+
+const isPastSchedule = (value: string | undefined) =>
+  Boolean(value) && new Date(value as string).getTime() < Date.now();
+
 function CandidateProfileContent() {
   const { hasPermission } = usePermissions();
   // Updating status and scheduling interviews go through updateCandidateStatus.
@@ -112,6 +122,13 @@ function CandidateProfileContent() {
   const [applicantStatuses, setApplicantStatuses] = useState<
     ApplicantStatusItem[]
   >([]);
+
+  const MANUAL_REVIEW_STATUS_NAME = "Manual Review";
+  const manualReviewStatus = applicantStatuses.find(
+    (status) => status.statusName === MANUAL_REVIEW_STATUS_NAME,
+  );
+  const [activeTab, setActiveTab] = useState<"all" | "manualReview">("all");
+  const [manualReviewCount, setManualReviewCount] = useState(0);
 
   const [draftStatusByApplicantId, setDraftStatusByApplicantId] = useState<
     Record<string, number>
@@ -166,6 +183,8 @@ function CandidateProfileContent() {
         title: "Schedule Interview",
         label: "Interview Date & Time",
         helper: "Choose the interview date and time.",
+        assigneeLabel: "Interviewer",
+        assigneeHelper: "Assign who will conduct this interview.",
       };
     }
 
@@ -174,6 +193,8 @@ function CandidateProfileContent() {
         title: "Schedule Job Offer",
         label: "Job Offer Date & Time",
         helper: "Choose when to discuss or release the job offer.",
+        assigneeLabel: "Facilitator",
+        assigneeHelper: "Assign who will facilitate the job offer.",
       };
     }
 
@@ -182,6 +203,8 @@ function CandidateProfileContent() {
         title: "Schedule Onboarding",
         label: "Onboarding Date & Time",
         helper: "Choose the onboarding schedule.",
+        assigneeLabel: "Facilitator",
+        assigneeHelper: "Assign who will facilitate the onboarding.",
       };
     }
 
@@ -192,11 +215,20 @@ function CandidateProfileContent() {
     };
   };
 
-  const isInterviewStatus = (statusId: number | null) =>
-    Boolean(getStatusName(statusId)?.includes("Interview"));
+  // Interview steps need an Interviewer; Job Offer and Onboarding need a
+  // Facilitator. Both are picked from the same interviewer list.
+  const requiresAssignee = (statusId: number | null) => {
+    const statusName = getStatusName(statusId);
+    return Boolean(
+      statusName?.includes("Interview") ||
+        statusName === "Job Offer" ||
+        statusName === "Onboarding",
+    );
+  };
 
   const scheduleModalCopy = getScheduleModalCopy(scheduleModalStatusId);
-  const showInterviewerSelect = isInterviewStatus(scheduleModalStatusId);
+  const showInterviewerSelect = requiresAssignee(scheduleModalStatusId);
+  const assigneeLabel = scheduleModalCopy.assigneeLabel ?? "Interviewer";
 
   useEffect(() => {
     const fetchInterviewers = async () => {
@@ -226,7 +258,9 @@ function CandidateProfileContent() {
     const fetchCandidates = async () => {
       setIsLoadingCandidates(true);
       try {
-        const response = await getCandidateList(jobId, pageNumber, pageSize);
+        const statusId =
+          activeTab === "manualReview" ? manualReviewStatus?.statusId : undefined;
+        const response = await getCandidateList(jobId, pageNumber, pageSize, statusId);
         setCandidates(response.data);
         setTotalCount(response.totalCount);
       } catch (error) {
@@ -236,7 +270,22 @@ function CandidateProfileContent() {
       }
     };
     fetchCandidates();
-  }, [jobId, pageNumber, pageSize]);
+  }, [jobId, pageNumber, pageSize, activeTab, manualReviewStatus?.statusId]);
+
+  useEffect(() => {
+    if (!manualReviewStatus) {
+      return;
+    }
+    const fetchManualReviewCount = async () => {
+      try {
+        const response = await getCandidateList(jobId, 1, 1, manualReviewStatus.statusId);
+        setManualReviewCount(response.totalCount);
+      } catch (error) {
+        console.error("Error fetching manual review count:", error);
+      }
+    };
+    fetchManualReviewCount();
+  }, [jobId, manualReviewStatus]);
 
   const handlePageChange = createMuiPageChangeHandler(setPageNumber);
 
@@ -352,7 +401,7 @@ function CandidateProfileContent() {
     const nextStatusId = draftStatusByApplicantId[applicantId];
     const isRescheduleOnly = !hasStatusChange(applicantId);
 
-    const interviewerId = isInterviewStatus(nextStatusId)
+    const interviewerId = requiresAssignee(nextStatusId)
       ? draftInterviewerByApplicantId[applicantId]
       : undefined;
 
@@ -368,10 +417,20 @@ function CandidateProfileContent() {
     }
 
     if (
+      isRescheduleOnly &&
+      shouldOpenScheduleModal(nextStatusId) &&
+      isPastSchedule(draftScheduleByApplicantId[applicantId])
+    ) {
+      setSaveError("Please choose a future date and time.");
+      return;
+    }
+
+    if (
       !isRescheduleOnly &&
       shouldOpenScheduleModal(nextStatusId) &&
       (!draftScheduleByApplicantId[applicantId] ||
-        (isInterviewStatus(nextStatusId) && !interviewerId))
+        isPastSchedule(draftScheduleByApplicantId[applicantId]) ||
+        (requiresAssignee(nextStatusId) && !interviewerId))
     ) {
       setScheduleModalApplicantId(applicantId);
       setScheduleModalStatusId(nextStatusId);
@@ -392,12 +451,24 @@ function CandidateProfileContent() {
     setSavingApplicantId(applicantId);
     setSaveError(null);
 
+    // Job Offer and Onboarding have their own schedule and facilitator
+    // fields; every other status keeps using the interview fields.
+    const nextStatusName = getStatusName(nextStatusId);
+    const scheduleFields =
+      nextStatusName === "Job Offer"
+        ? { jobOfferSched: nextSchedule, jobOfferFacilitatorId: interviewerId }
+        : nextStatusName === "Onboarding"
+          ? {
+              onboardingSched: nextSchedule,
+              onboardingFacilitatorId: interviewerId,
+            }
+          : { interviewSched: nextSchedule, interviewerId };
+
     try {
       await updateCandidateStatus({
         id: applicantId,
         applicantStatusId: nextStatusId,
-        interviewSched: nextSchedule,
-        interviewerId,
+        ...scheduleFields,
         updatedAt: new Date().toISOString(),
       });
 
@@ -462,13 +533,19 @@ function CandidateProfileContent() {
     const missingSchedule = !scheduleDraftValue;
     const missingInterviewer = showInterviewerSelect && !interviewerDraftValue;
 
+    const pastSchedule = isPastSchedule(scheduleDraftValue);
+
     if (missingSchedule) {
       setScheduleError("Please choose date and time.");
+    } else if (pastSchedule) {
+      setScheduleError("Please choose a future date and time.");
     }
     if (missingInterviewer) {
-      setInterviewerError("Please assign an interviewer.");
+      setInterviewerError(
+        `Please assign ${assigneeLabel === "Facilitator" ? "a facilitator" : "an interviewer"}.`,
+      );
     }
-    if (missingSchedule || missingInterviewer) {
+    if (missingSchedule || pastSchedule || missingInterviewer) {
       return;
     }
 
@@ -490,6 +567,11 @@ function CandidateProfileContent() {
     setEditingApplicantId(applicantId);
   };
 
+  const handleTabChange = (_event: SyntheticEvent, value: "all" | "manualReview") => {
+    setActiveTab(value);
+    setPageNumber(1);
+  };
+
   return (
     <Paper
       elevation={0}
@@ -509,6 +591,30 @@ function CandidateProfileContent() {
       >
         Candidates Profile
       </Typography>
+
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        sx={{ mb: 2, minHeight: 0 }}
+      >
+        <Tab label="All Candidates" value="all" sx={{ minHeight: 0 }} />
+        <Tab
+          value="manualReview"
+          sx={{ minHeight: 0 }}
+          label={
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <span>Needs Manual Review</span>
+              {manualReviewCount > 0 && (
+                <Badge
+                  badgeContent={manualReviewCount}
+                  color="warning"
+                  sx={{ "& .MuiBadge-badge": { position: "static", transform: "none" } }}
+                />
+              )}
+            </Box>
+          }
+        />
+      </Tabs>
 
       <CandidateTable
         canEdit={canEditCandidates}
@@ -563,11 +669,12 @@ function CandidateProfileContent() {
             fullWidth
             error={Boolean(scheduleError)}
             helperText={scheduleError || scheduleModalCopy.helper}
+            slotProps={{ htmlInput: { min: getMinScheduleValue() } }}
           />
           {showInterviewerSelect && (
             <TextField
               select
-              label="Interviewer"
+              label={assigneeLabel}
               value={interviewerDraftValue}
               onChange={(event) => {
                 setInterviewerDraftValue(event.target.value);
@@ -579,8 +686,8 @@ function CandidateProfileContent() {
               helperText={
                 interviewerError ||
                 (interviewers.length === 0
-                  ? "No active interviewers found."
-                  : "Assign who will conduct this interview.")
+                  ? `No active ${assigneeLabel.toLowerCase()}s found.`
+                  : scheduleModalCopy.assigneeHelper)
               }
               sx={{ mt: 2 }}
             >
