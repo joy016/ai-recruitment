@@ -90,7 +90,8 @@ namespace ai_recruitment.Tests.Features.Candidates
                 new ApplicantStatus { StatusId = 8, StatusName = "Background Check" },
                 new ApplicantStatus { StatusId = 9, StatusName = "Onboarding" },
                 new ApplicantStatus { StatusId = 10, StatusName = "Offered" },
-                new ApplicantStatus { StatusId = 11, StatusName = "Rejected" });
+                new ApplicantStatus { StatusId = 11, StatusName = "Rejected" },
+                new ApplicantStatus { StatusId = 12, StatusName = "Manual Review" });
 
             var candidate = new Candidate
             {
@@ -109,6 +110,8 @@ namespace ai_recruitment.Tests.Features.Candidates
             await context.SaveChangesAsync();
 
             var publisher = new FakeCandidateStatusWebhookPublisher();
+            var notificationService = new NoOpNotificationService();
+            var statusChangeService = new CandidateStatusChangeService(context, notificationService, publisher);
 
             var controller = new CandidatesController(
                 context,
@@ -117,8 +120,9 @@ namespace ai_recruitment.Tests.Features.Candidates
                 logger: NullLogger<CandidatesController>.Instance,
                 screeningRequestPublisher: new NoOpScreeningRequestPublisher(),
                 supabaseStorageService: new NoOpSupabaseStorageService(),
-                notificationService: new NoOpNotificationService(),
-                candidateStatusWebhookPublisher: publisher);
+                notificationService: notificationService,
+                candidateStatusWebhookPublisher: publisher,
+                candidateStatusChangeService: statusChangeService);
 
             var httpContext = new DefaultHttpContext
             {
@@ -149,11 +153,11 @@ namespace ai_recruitment.Tests.Features.Candidates
         }
 
         [Theory]
-        [InlineData(1)] // Application Submitted
-        [InlineData(2)] // AI Screening passed
-        [InlineData(7)] // Requirements Gathering
-        [InlineData(8)] // Background Check
-        [InlineData(10)] // Offered - deliberately excluded
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(7)]
+        [InlineData(8)]
+        [InlineData(10)]
         public async Task UpdateCandidateStatus_DoesNotTriggerWebhookPublisher_ForNonNotifiableStatuses(int newStatusId)
         {
             var (controller, publisher, candidate) = await CreateControllerAsync(initialStatusId: 1 == newStatusId ? 2 : 1);
@@ -166,7 +170,7 @@ namespace ai_recruitment.Tests.Features.Candidates
         [Fact]
         public async Task UpdateCandidateStatus_DoesNotTriggerWebhookPublisher_WhenStatusIsUnchanged()
         {
-            var (controller, publisher, candidate) = await CreateControllerAsync(initialStatusId: 11); // already "Rejected"
+            var (controller, publisher, candidate) = await CreateControllerAsync(initialStatusId: 11);
 
             await controller.UpdateCandidateStatus(new UpdateCandidateStatusDto { Id = candidate.Id, ApplicantStatusId = 11 });
 
@@ -176,7 +180,7 @@ namespace ai_recruitment.Tests.Features.Candidates
         [Fact]
         public async Task UpdateCandidateStatus_DoesNotTriggerWebhookPublisher_WhenOnlyInterviewScheduleChanges()
         {
-            var (controller, publisher, candidate) = await CreateControllerAsync(initialStatusId: 3); // Initial Interview
+            var (controller, publisher, candidate) = await CreateControllerAsync(initialStatusId: 3);
 
             await controller.UpdateCandidateStatus(new UpdateCandidateStatusDto
             {

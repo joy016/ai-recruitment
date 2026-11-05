@@ -42,5 +42,11 @@ namespace ai_recruitment.Features.Candidates.Services
 
         public static bool IsInterviewStatus(string? statusName) =>
             !string.IsNullOrWhiteSpace(statusName) && InterviewStatusNames.Contains(statusName.Trim());
+
+        public static bool IsJobOfferStatus(string? statusName) =>
+            !string.IsNullOrWhiteSpace(statusName) && statusName.Trim().Equals("Job Offer", StringComparison.OrdinalIgnoreCase);
+
+        public static bool IsOnboardingStatus(string? statusName) =>
+            !string.IsNullOrWhiteSpace(statusName) && statusName.Trim().Equals("Onboarding", StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -74,6 +74,68 @@ namespace ai_recruitment.Features.Candidates.Services
                     }
                 }
 
+                DateTime? jobOfferSchedule = null;
+                string? jobOfferFacilitatorName = null;
+                if (CandidateStatusNotifications.IsJobOfferStatus(newStatusName))
+                {
+                    if (candidate.JobOfferSched.HasValue)
+                    {
+                        jobOfferSchedule = DateTime.SpecifyKind(candidate.JobOfferSched.Value, DateTimeKind.Utc);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Candidate {CandidateId} moved to job offer status '{NewStatus}' with no JobOfferSched set; sending the webhook with jobOfferSchedule = null.",
+                            candidate.Id, newStatusName);
+                    }
+
+                    if (candidate.JobOfferFacilitatorId.HasValue)
+                    {
+                        jobOfferFacilitatorName = await _context.Users
+                            .AsNoTracking()
+                            .Where(u => u.Id == candidate.JobOfferFacilitatorId.Value)
+                            .Select(u => u.FirstName + " " + u.LastName)
+                            .FirstOrDefaultAsync(cancellationToken);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Candidate {CandidateId} moved to job offer status '{NewStatus}' with no JobOfferFacilitatorId set; sending the webhook with jobOfferFacilitatorName = null.",
+                            candidate.Id, newStatusName);
+                    }
+                }
+
+                DateTime? onboardingSchedule = null;
+                string? onboardingFacilitatorName = null;
+                if (CandidateStatusNotifications.IsOnboardingStatus(newStatusName))
+                {
+                    if (candidate.OnboardingSched.HasValue)
+                    {
+                        onboardingSchedule = DateTime.SpecifyKind(candidate.OnboardingSched.Value, DateTimeKind.Utc);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Candidate {CandidateId} moved to onboarding status '{NewStatus}' with no OnboardingSched set; sending the webhook with onboardingSchedule = null.",
+                            candidate.Id, newStatusName);
+                    }
+
+                    if (candidate.OnboardingFacilitatorId.HasValue)
+                    {
+                        onboardingFacilitatorName = await _context.Users
+                            .AsNoTracking()
+                            .Where(u => u.Id == candidate.OnboardingFacilitatorId.Value)
+                            .Select(u => u.FirstName + " " + u.LastName)
+                            .FirstOrDefaultAsync(cancellationToken);
+                    }
+                    else
+                    {
+                        _logger.LogWarning(
+                            "Candidate {CandidateId} moved to onboarding status '{NewStatus}' with no OnboardingFacilitatorId set; sending the webhook with onboardingFacilitatorName = null.",
+                            candidate.Id, newStatusName);
+                    }
+                }
+
                 var jobTitle = await _context.Jobs
                     .AsNoTracking()
                     .Where(j => j.JobId == candidate.JobId)
@@ -94,6 +156,10 @@ namespace ai_recruitment.Features.Candidates.Services
                     EmailType = emailType,
                     InterviewSchedule = interviewSchedule,
                     InterviewerName = interviewerName,
+                    JobOfferSchedule = jobOfferSchedule,
+                    JobOfferFacilitatorName = jobOfferFacilitatorName,
+                    OnboardingSchedule = onboardingSchedule,
+                    OnboardingFacilitatorName = onboardingFacilitatorName,
                     ChangedAt = DateTime.UtcNow,
                     ChangedBy = changedBy,
                 };

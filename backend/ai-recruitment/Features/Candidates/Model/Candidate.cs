@@ -41,8 +41,13 @@ namespace ai_recruitment.Features.Candidates.model
         public Guid? InterviewerId { get; set; }
         public User? Interviewer { get; set; }
 
+        public DateTime? JobOfferSched { get; set; }
+        public Guid? JobOfferFacilitatorId { get; set; }
+        public User? JobOfferFacilitator { get; set; }
 
-
+        public DateTime? OnboardingSched { get; set; }
+        public Guid? OnboardingFacilitatorId { get; set; }
+        public User? OnboardingFacilitator { get; set; }
 
 
     }

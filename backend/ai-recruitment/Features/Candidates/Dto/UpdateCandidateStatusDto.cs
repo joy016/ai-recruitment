@@ -9,6 +9,10 @@
 
         public Guid? InterviewerId { get; set; }
 
+        public DateTime? JobOfferSched { get; set; }
+        public Guid? JobOfferFacilitatorId { get; set; }
 
+        public DateTime? OnboardingSched { get; set; }
+        public Guid? OnboardingFacilitatorId { get; set; }
     }
 }

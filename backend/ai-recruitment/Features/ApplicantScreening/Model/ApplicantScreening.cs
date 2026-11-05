@@ -27,6 +27,15 @@ namespace ai_recruitment.Features.ApplicantScreening.Model
         // "Completed" | "Failed" | "Incomplete" - whatever n8n reports back.
         public required string ScreeningStatus { get; set; }
 
+        // Whether the AI agent itself flagged this result as needing a human look, as
+        // reported in the callback. See AiScreeningStatusMapper for how this (plus
+        // ScreeningStatus/Recommendation) decides the candidate's status.
+        public bool RequiresHumanReview { get; set; }
+
+        // Recruiter-facing explanation for why this landed in "Manual Review" (null when it
+        // didn't). Derived server-side by AiScreeningStatusMapper, not sent by n8n directly.
+        public string? ManualReviewReason { get; set; }
+
         public DateTime? ScreenedAt { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

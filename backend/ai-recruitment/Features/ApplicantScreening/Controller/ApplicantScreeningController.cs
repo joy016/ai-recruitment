@@ -3,6 +3,7 @@ using ai_recruitment.Features.ApplicantScreening.Dto;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
 using Microsoft.AspNetCore.Authorization;
@@ -16,28 +17,37 @@ namespace ai_recruitment.Features.ApplicantScreening.Controller
     [Route("api/[controller]")]
     public class ApplicantScreeningController : ControllerBase
     {
+        // ChangedBy recorded on the webhook/notification when a result auto-advances the
+        // candidate's status - there is no HR JWT on this callback to attribute it to.
+        private const string AiScreeningChangedBy = "AI Screening";
+
         private readonly AppDbContext _context;
         private readonly N8nScreeningOptions _options;
         private readonly INotificationService _notificationService;
+        private readonly ICandidateStatusChangeService _candidateStatusChangeService;
         private readonly ILogger<ApplicantScreeningController> _logger;
 
         public ApplicantScreeningController(
             AppDbContext context,
             IOptions<N8nScreeningOptions> options,
             INotificationService notificationService,
+            ICandidateStatusChangeService candidateStatusChangeService,
             ILogger<ApplicantScreeningController> logger)
         {
             _context = context;
             _options = options.Value;
             _notificationService = notificationService;
+            _candidateStatusChangeService = candidateStatusChangeService;
             _logger = logger;
         }
 
-        // Called by the n8n "applicant-screening" workflow once it has an AI result (or
-        // has given up). Authenticated with a shared secret header instead of a JWT,
-        // since the caller is n8n, not a logged-in user - hence no [Authorize]/[HasPermission]
-        // here. The AI score/recommendation are advisory only; this endpoint never touches
-        // Candidate.ApplicantStatusId.
+        // Called by the n8n "applicant-screening" workflow once it has an AI result (or has
+        // given up). Authenticated with a shared secret header instead of a JWT, since the
+        // caller is n8n, not a logged-in user - hence no [Authorize]/[HasPermission] here.
+        // The AI result is advisory: it can move a candidate to "AI Screening passed" or
+        // "Manual Review" (see AiScreeningStatusMapper), but only from "Application
+        // Submitted" or "Manual Review" itself - it never overwrites a status a recruiter
+        // already advanced to.
         [HttpPost("results")]
         [AllowAnonymous]
         public async Task<IActionResult> SubmitResults(
@@ -72,71 +82,148 @@ namespace ai_recruitment.Features.ApplicantScreening.Controller
                 });
             }
 
+            if (AiScreeningStatusMapper.ParseScreeningStatus(dto.ScreeningStatus) == ScreeningStatusValue.Unknown)
+            {
+                _logger.LogWarning(
+                    "Unrecognized screeningStatus '{ScreeningStatus}' for Candidate {CandidateId}; treating as needing manual review.",
+                    dto.ScreeningStatus, dto.CandidateId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(dto.Recommendation)
+                && AiScreeningStatusMapper.ParseRecommendation(dto.Recommendation) == ScreeningRecommendationValue.Unknown)
+            {
+                _logger.LogWarning(
+                    "Unrecognized recommendation '{Recommendation}' for Candidate {CandidateId}; treating as needing manual review.",
+                    dto.Recommendation, dto.CandidateId);
+            }
+
             var matchedSkills = dto.MatchedSkills ?? [];
             var missingSkills = dto.MissingSkills ?? [];
 
             var existing = await _context.Set<Model.ApplicantScreening>()
                 .FirstOrDefaultAsync(s => s.CandidateId == dto.CandidateId, cancellationToken);
 
-            if (existing != null)
+            if (existing != null && IsSameResult(existing, dto, matchedSkills, missingSkills))
             {
-                if (IsSameResult(existing, dto, matchedSkills, missingSkills))
+                // Identical retry of a result we already stored (e.g. n8n's own retry after a
+                // dropped response) - acknowledge without writing again. No notification or
+                // status re-evaluation either: nothing about the result actually changed.
+                return Ok(new { message = "Screening result already recorded.", duplicate = true });
+            }
+
+            var (targetStatusName, manualReviewReason) = AiScreeningStatusMapper.Map(
+                dto.ScreeningStatus, dto.Recommendation, dto.RequiresHumanReview);
+
+            bool statusChanged;
+            int newStatusId = 0;
+
+            // Screening-result upsert and the (possible) status change land in one
+            // transaction: either both are visible or neither is.
+            await using (var transaction = await _context.Database.BeginTransactionAsync(cancellationToken))
+            {
+                if (existing != null)
                 {
-                    // Identical retry of a result we already stored (e.g. n8n's own retry
-                    // after a dropped response) - acknowledge without writing again. No
-                    // notification either: nothing about the result actually changed.
-                    return Ok(new { message = "Screening result already recorded.", duplicate = true });
+                    existing.QualificationScore = dto.QualificationScore;
+                    existing.MatchedSkills = matchedSkills;
+                    existing.MissingSkills = missingSkills;
+                    existing.Recommendation = dto.Recommendation;
+                    existing.Summary = dto.Summary;
+                    existing.ScreeningStatus = dto.ScreeningStatus;
+                    existing.ScreenedAt = dto.ScreenedAt;
+                    existing.RequiresHumanReview = dto.RequiresHumanReview ?? true;
+                    existing.ManualReviewReason = manualReviewReason;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+                else
+                {
+                    _context.Set<Model.ApplicantScreening>().Add(new Model.ApplicantScreening
+                    {
+                        Id = Guid.NewGuid(),
+                        CandidateId = dto.CandidateId,
+                        JobId = dto.JobId,
+                        QualificationScore = dto.QualificationScore,
+                        MatchedSkills = matchedSkills,
+                        MissingSkills = missingSkills,
+                        Recommendation = dto.Recommendation,
+                        Summary = dto.Summary,
+                        ScreeningStatus = dto.ScreeningStatus,
+                        ScreenedAt = dto.ScreenedAt,
+                        RequiresHumanReview = dto.RequiresHumanReview ?? true,
+                        ManualReviewReason = manualReviewReason,
+                    });
                 }
 
-                existing.QualificationScore = dto.QualificationScore;
-                existing.MatchedSkills = matchedSkills;
-                existing.MissingSkills = missingSkills;
-                existing.Recommendation = dto.Recommendation;
-                existing.Summary = dto.Summary;
-                existing.ScreeningStatus = dto.ScreeningStatus;
-                existing.ScreenedAt = dto.ScreenedAt;
-                existing.UpdatedAt = DateTime.UtcNow;
-            }
-            else
-            {
-                _context.Set<Model.ApplicantScreening>().Add(new Model.ApplicantScreening
+                await _context.SaveChangesAsync(cancellationToken);
+
+                var previousStatusId = candidate.ApplicantStatusId;
+                var currentStatusName = await _context.ApplicantStatuses
+                    .AsNoTracking()
+                    .Where(s => s.StatusId == previousStatusId)
+                    .Select(s => s.StatusName)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                statusChanged = false;
+
+                // Never overwrite a status a recruiter already advanced the candidate to
+                // (Initial Interview, Rejected, etc.) - only auto-update from the two statuses
+                // a screening result is actually about.
+                if (AiScreeningStatusMapper.IsEligibleForAutoUpdate(currentStatusName))
                 {
-                    Id = Guid.NewGuid(),
-                    CandidateId = dto.CandidateId,
-                    JobId = dto.JobId,
-                    QualificationScore = dto.QualificationScore,
-                    MatchedSkills = matchedSkills,
-                    MissingSkills = missingSkills,
-                    Recommendation = dto.Recommendation,
-                    Summary = dto.Summary,
-                    ScreeningStatus = dto.ScreeningStatus,
-                    ScreenedAt = dto.ScreenedAt,
-                });
+                    var resolvedStatusId = await _context.ApplicantStatuses
+                        .AsNoTracking()
+                        .Where(s => s.StatusName == targetStatusName)
+                        .Select(s => (int?)s.StatusId)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    if (resolvedStatusId.HasValue)
+                    {
+                        newStatusId = resolvedStatusId.Value;
+                        statusChanged = _candidateStatusChangeService.StageStatusChange(candidate, newStatusId);
+                        if (statusChanged)
+                        {
+                            await _context.SaveChangesAsync(cancellationToken);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogError(
+                            "Target status '{TargetStatus}' is not seeded in ApplicantStatuses; skipping auto status update for Candidate {CandidateId}.",
+                            targetStatusName, dto.CandidateId);
+                    }
+                }
+
+                if (statusChanged)
+                {
+                    await _candidateStatusChangeService.NotifyStatusChangedAsync(
+                        candidate, previousStatusId, newStatusId, AiScreeningChangedBy, cancellationToken);
+                }
+
+                await transaction.CommitAsync(cancellationToken);
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await NotifyScreeningResultAsync(candidate, dto, targetStatusName, manualReviewReason, cancellationToken);
 
-            await NotifyScreeningResultAsync(candidate, dto, cancellationToken);
-
-            return Ok(new { message = "Screening result saved." });
+            return Ok(new
+            {
+                message = "Screening result saved.",
+                statusUpdated = statusChanged,
+                newStatus = statusChanged ? targetStatusName : null,
+            });
         }
 
-        // The DTO's ScreeningStatus has no distinct pass/fail value within "completed" (see
-        // SubmitScreeningResultDto) - COMPLETED/MANUAL_REVIEW_REQUIRED/UNREADABLE_RESUME is the
-        // full set n8n sends today. Mapped as: COMPLETED -> Passed, MANUAL_REVIEW_REQUIRED ->
-        // NeedsReview, UNREADABLE_RESUME -> Failed. If COMPLETED should itself split into
-        // pass/fail (e.g. by QualificationScore or Recommendation), that needs a rule from
-        // product/n8n first - flagging rather than guessing a threshold.
         private async Task NotifyScreeningResultAsync(
             Candidate candidate,
             SubmitScreeningResultDto dto,
+            string targetStatusName,
+            string? manualReviewReason,
             CancellationToken cancellationToken)
         {
-            var (type, severity) = dto.ScreeningStatus switch
+            var passed = targetStatusName == AiScreeningStatusMapper.AiScreeningPassedStatusName;
+
+            var (type, severity) = (dto.ScreeningStatus?.Trim().ToUpperInvariant(), passed) switch
             {
-                "COMPLETED" => (NotificationType.AiScreeningPassed, NotificationSeverity.Success),
-                "MANUAL_REVIEW_REQUIRED" => (NotificationType.AiScreeningNeedsReview, NotificationSeverity.Warning),
-                "UNREADABLE_RESUME" => (NotificationType.AiScreeningFailed, NotificationSeverity.Warning),
+                (_, true) => (NotificationType.AiScreeningPassed, NotificationSeverity.Success),
+                ("UNREADABLE_RESUME", false) => (NotificationType.AiScreeningFailed, NotificationSeverity.Warning),
                 _ => (NotificationType.AiScreeningNeedsReview, NotificationSeverity.Warning),
             };
 
@@ -157,7 +244,9 @@ namespace ai_recruitment.Features.ApplicantScreening.Controller
             var message = type switch
             {
                 NotificationType.AiScreeningPassed => $"{candidateName} passed AI screening for {jobTitle}.",
-                NotificationType.AiScreeningNeedsReview => $"{candidateName} needs manual review for {jobTitle}.",
+                NotificationType.AiScreeningNeedsReview => manualReviewReason != null
+                    ? $"{candidateName} needs manual review for {jobTitle}: {manualReviewReason}"
+                    : $"{candidateName} needs manual review for {jobTitle}.",
                 NotificationType.AiScreeningFailed => $"AI screening could not be completed for {candidateName}'s application for {jobTitle}.",
                 _ => $"AI screening updated for {candidateName} for {jobTitle}.",
             };
@@ -228,6 +317,7 @@ namespace ai_recruitment.Features.ApplicantScreening.Controller
                 && existing.Recommendation == dto.Recommendation
                 && existing.Summary == dto.Summary
                 && existing.ScreenedAt == dto.ScreenedAt
+                && existing.RequiresHumanReview == (dto.RequiresHumanReview ?? true)
                 && existing.MatchedSkills.SequenceEqual(matchedSkills)
                 && existing.MissingSkills.SequenceEqual(missingSkills);
         }

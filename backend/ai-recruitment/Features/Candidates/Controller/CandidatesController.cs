@@ -42,6 +42,7 @@ namespace ai_recruitment.Features.Candidates.controller
         private readonly ISupabaseStorageService _supabaseStorageService;
         private readonly INotificationService _notificationService;
         private readonly ICandidateStatusWebhookPublisher _candidateStatusWebhookPublisher;
+        private readonly ICandidateStatusChangeService _candidateStatusChangeService;
 
         public CandidatesController(
             AppDbContext context,
@@ -51,7 +52,8 @@ namespace ai_recruitment.Features.Candidates.controller
             IScreeningRequestPublisher screeningRequestPublisher,
             ISupabaseStorageService supabaseStorageService,
             INotificationService notificationService,
-            ICandidateStatusWebhookPublisher candidateStatusWebhookPublisher)
+            ICandidateStatusWebhookPublisher candidateStatusWebhookPublisher,
+            ICandidateStatusChangeService candidateStatusChangeService)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
@@ -61,6 +63,7 @@ namespace ai_recruitment.Features.Candidates.controller
             _supabaseStorageService = supabaseStorageService;
             _notificationService = notificationService;
             _candidateStatusWebhookPublisher = candidateStatusWebhookPublisher;
+            _candidateStatusChangeService = candidateStatusChangeService;
         }
 
 
@@ -378,7 +381,7 @@ namespace ai_recruitment.Features.Candidates.controller
 
         [HttpGet("getCandidates")]
         [HasPermission(PermissionNames.Candidates.View)]
-        public async Task<IActionResult> GetAllCandidates([FromQuery] int? jobId, [FromQuery] int? pageNumber = 1, [FromQuery] int? pageSize = 10)
+        public async Task<IActionResult> GetAllCandidates([FromQuery] int? jobId, [FromQuery] int? statusId, [FromQuery] int? pageNumber = 1, [FromQuery] int? pageSize = 10)
         {
             var query = _context.Candidates.AsNoTracking()
                         .AsQueryable();
@@ -386,6 +389,13 @@ namespace ai_recruitment.Features.Candidates.controller
             if (jobId.HasValue && jobId.Value != 0)
             {
                 query = query.Where(c => c.JobId == jobId.Value);
+            }
+
+            // Lets the "Needs Manual Review" tab (and similar status filters) page through
+            // just that slice server-side instead of fetching everything and filtering client-side.
+            if (statusId.HasValue)
+            {
+                query = query.Where(c => c.ApplicantStatusId == statusId.Value);
             }
 
             query = query.OrderBy(c => c.CreatedAt);
@@ -493,10 +503,8 @@ namespace ai_recruitment.Features.Candidates.controller
             // Supports partial updates: changing only the status, only the
             // interview schedule (e.g. correcting a date/time), or only
             // reassigning the interviewer - without requiring the others.
-            if (dto.ApplicantStatusId.HasValue)
-            {
-                candidate.ApplicantStatusId = dto.ApplicantStatusId.Value;
-            }
+            var statusStaged = dto.ApplicantStatusId.HasValue
+                && _candidateStatusChangeService.StageStatusChange(candidate, dto.ApplicantStatusId.Value);
 
             if (dto.InterviewSched.HasValue)
             {
@@ -508,52 +516,47 @@ namespace ai_recruitment.Features.Candidates.controller
                 candidate.InterviewerId = dto.InterviewerId.Value;
             }
 
-            candidate.UpdatedAt = DateTime.UtcNow;
+            if (dto.JobOfferSched.HasValue)
+            {
+                candidate.JobOfferSched = dto.JobOfferSched.Value;
+            }
+
+            if (dto.JobOfferFacilitatorId.HasValue)
+            {
+                candidate.JobOfferFacilitatorId = dto.JobOfferFacilitatorId.Value;
+            }
+
+            if (dto.OnboardingSched.HasValue)
+            {
+                candidate.OnboardingSched = dto.OnboardingSched.Value;
+            }
+
+            if (dto.OnboardingFacilitatorId.HasValue)
+            {
+                candidate.OnboardingFacilitatorId = dto.OnboardingFacilitatorId.Value;
+            }
+
+            // StageStatusChange already set UpdatedAt when the status actually changed; for a
+            // reschedule-only edit (no status change) it still needs to be bumped here.
+            if (!statusStaged)
+            {
+                candidate.UpdatedAt = DateTime.UtcNow;
+            }
 
             await _context.SaveChangesAsync();
 
-            if (dto.ApplicantStatusId.HasValue && dto.ApplicantStatusId.Value != previousStatusId)
+            if (statusStaged)
             {
-                var statusName = await _context.ApplicantStatuses
-                    .Where(s => s.StatusId == dto.ApplicantStatusId.Value)
-                    .Select(s => s.StatusName)
-                    .FirstOrDefaultAsync() ?? "a new stage";
-
-                await _notificationService.NotifyAsync(
-                    NotificationType.CandidateStatusChanged,
-                    new NotificationContext
-                    {
-                        Severity = NotificationSeverity.Info,
-                        Title = "Candidate Status Changed",
-                        Message = $"{candidate.FirstName} {candidate.LastName} moved to {statusName}.",
-                        CandidateId = candidate.Id,
-                        JobId = candidate.JobId,
-                    },
-                    $"status:{candidate.Id}:{dto.ApplicantStatusId.Value}",
-                    HttpContext.RequestAborted);
-
-                // Candidate status-change emails (interview/offer/onboarding/rejection) via
-                // n8n - only for the specific statuses CandidateStatusNotifications knows
-                // about (the "a new stage" fallback above never matches that set). Enqueues
-                // a durable outbox row and returns immediately; delivery happens on a
-                // background dispatcher so a down/slow n8n can never delay or fail this
+                // Enqueues a durable outbox row and returns immediately; delivery happens on
+                // a background dispatcher so a down/slow n8n can never delay or fail this
                 // response.
-                if (CandidateStatusNotifications.TryGetEmailType(statusName, out _))
-                {
-                    var previousStatusName = await _context.ApplicantStatuses
-                        .Where(s => s.StatusId == previousStatusId)
-                        .Select(s => s.StatusName)
-                        .FirstOrDefaultAsync();
-
-                    var changedBy = User.FindFirstValue(ClaimTypes.Name);
-
-                    await _candidateStatusWebhookPublisher.PublishAsync(
-                        candidate,
-                        previousStatusName,
-                        statusName,
-                        changedBy,
-                        HttpContext.RequestAborted);
-                }
+                var changedBy = User.FindFirstValue(ClaimTypes.Name);
+                await _candidateStatusChangeService.NotifyStatusChangedAsync(
+                    candidate,
+                    previousStatusId,
+                    dto.ApplicantStatusId!.Value,
+                    changedBy,
+                    HttpContext.RequestAborted);
             }
 
             return Ok(new

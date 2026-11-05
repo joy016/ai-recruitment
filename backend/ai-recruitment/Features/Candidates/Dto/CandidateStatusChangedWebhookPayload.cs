@@ -53,6 +53,26 @@ namespace ai_recruitment.Features.Candidates.Dto
         [JsonPropertyName("interviewerName")]
         public string? InterviewerName { get; init; }
 
+        // UTC ISO 8601, or null when newStatus isn't "Job Offer", or when it is but no
+        // schedule has been set yet (see CandidateStatusWebhookPublisher).
+        [JsonPropertyName("jobOfferSchedule")]
+        public DateTime? JobOfferSchedule { get; init; }
+
+        // The assigned facilitator's full name, or null when newStatus isn't "Job Offer",
+        // or when it is but no facilitator has been assigned yet.
+        [JsonPropertyName("jobOfferFacilitatorName")]
+        public string? JobOfferFacilitatorName { get; init; }
+
+        // UTC ISO 8601, or null when newStatus isn't "Onboarding", or when it is but no
+        // schedule has been set yet (see CandidateStatusWebhookPublisher).
+        [JsonPropertyName("onboardingSchedule")]
+        public DateTime? OnboardingSchedule { get; init; }
+
+        // The assigned facilitator's full name, or null when newStatus isn't "Onboarding",
+        // or when it is but no facilitator has been assigned yet.
+        [JsonPropertyName("onboardingFacilitatorName")]
+        public string? OnboardingFacilitatorName { get; init; }
+
         [JsonPropertyName("changedAt")]
         public DateTime ChangedAt { get; init; }
 

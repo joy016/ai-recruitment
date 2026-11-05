@@ -38,6 +38,9 @@ namespace ai_recruitment.Migrations
                     b.Property<int>("JobId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ManualReviewReason")
+                        .HasColumnType("text");
+
                     b.PrimitiveCollection<string[]>("MatchedSkills")
                         .IsRequired()
                         .HasColumnType("text[]");
@@ -51,6 +54,9 @@ namespace ai_recruitment.Migrations
 
                     b.Property<string>("Recommendation")
                         .HasColumnType("text");
+
+                    b.Property<bool>("RequiresHumanReview")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime?>("ScreenedAt")
                         .HasColumnType("timestamp with time zone");
@@ -174,12 +180,22 @@ namespace ai_recruitment.Migrations
                         },
                         new
                         {
+                            StatusId = 12,
+                            Color = "#FBBF24",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "AI screening flagged this candidate for a recruiter to review",
+                            IsActive = true,
+                            SortOrder = 3,
+                            StatusName = "Manual Review"
+                        },
+                        new
+                        {
                             StatusId = 3,
                             Color = "#8B5CF6",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is scheduled for an initial interview",
                             IsActive = true,
-                            SortOrder = 3,
+                            SortOrder = 4,
                             StatusName = "Initial Interview"
                         },
                         new
@@ -189,7 +205,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is scheduled for a technical interview",
                             IsActive = true,
-                            SortOrder = 4,
+                            SortOrder = 5,
                             StatusName = "Technical Interview"
                         },
                         new
@@ -199,7 +215,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is scheduled for a final interview",
                             IsActive = true,
-                            SortOrder = 5,
+                            SortOrder = 6,
                             StatusName = "Final Interview"
                         },
                         new
@@ -209,7 +225,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is in the job offer stage",
                             IsActive = true,
-                            SortOrder = 6,
+                            SortOrder = 7,
                             StatusName = "Job Offer"
                         },
                         new
@@ -219,7 +235,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is submitting required documents",
                             IsActive = true,
-                            SortOrder = 6,
+                            SortOrder = 7,
                             StatusName = "Requirements Gathering"
                         },
                         new
@@ -229,7 +245,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is undergoing background verification",
                             IsActive = true,
-                            SortOrder = 7,
+                            SortOrder = 8,
                             StatusName = "Background Check"
                         },
                         new
@@ -239,7 +255,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate is currently in the onboarding process",
                             IsActive = true,
-                            SortOrder = 8,
+                            SortOrder = 9,
                             StatusName = "Onboarding"
                         },
                         new
@@ -249,7 +265,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Job offer has been formally extended to the candidate",
                             IsActive = true,
-                            SortOrder = 9,
+                            SortOrder = 10,
                             StatusName = "Offered"
                         },
                         new
@@ -259,7 +275,7 @@ namespace ai_recruitment.Migrations
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Description = "Candidate was rejected during the recruitment process",
                             IsActive = true,
-                            SortOrder = 10,
+                            SortOrder = 11,
                             StatusName = "Rejected"
                         });
                 });
@@ -365,12 +381,24 @@ namespace ai_recruitment.Migrations
                     b.Property<int>("JobId")
                         .HasColumnType("integer");
 
+                    b.Property<Guid?>("JobOfferFacilitatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("JobOfferSched")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("LinkedInProfile")
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("OnboardingFacilitatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("OnboardingSched")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
@@ -407,6 +435,10 @@ namespace ai_recruitment.Migrations
                     b.HasIndex("InterviewerId");
 
                     b.HasIndex("JobId");
+
+                    b.HasIndex("JobOfferFacilitatorId");
+
+                    b.HasIndex("OnboardingFacilitatorId");
 
                     b.ToTable("Candidates");
                 });
@@ -1538,9 +1570,23 @@ namespace ai_recruitment.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("ai_recruitment.Features.Users.Model.User", "JobOfferFacilitator")
+                        .WithMany()
+                        .HasForeignKey("JobOfferFacilitatorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("ai_recruitment.Features.Users.Model.User", "OnboardingFacilitator")
+                        .WithMany()
+                        .HasForeignKey("OnboardingFacilitatorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Interviewer");
 
                     b.Navigation("Job");
+
+                    b.Navigation("JobOfferFacilitator");
+
+                    b.Navigation("OnboardingFacilitator");
                 });
 
             modelBuilder.Entity("ai_recruitment.Features.Inbox.Model.EmailAttachment", b =>

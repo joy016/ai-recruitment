@@ -170,6 +170,7 @@ builder.Services.AddHttpClient<IN8nCandidateStatusWebhookService, N8nCandidateSt
 
 builder.Services.AddSingleton<CandidateStatusOutboxChannel>();
 builder.Services.AddScoped<ICandidateStatusWebhookPublisher, CandidateStatusWebhookPublisher>();
+builder.Services.AddScoped<ICandidateStatusChangeService, CandidateStatusChangeService>();
 builder.Services.AddHostedService<CandidateStatusOutboxDispatcher>();
 
 // Notifications: panel/bell + per-category preferences (see Features/Notifications).

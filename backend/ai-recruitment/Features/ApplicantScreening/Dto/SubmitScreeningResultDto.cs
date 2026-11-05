@@ -26,6 +26,10 @@ namespace ai_recruitment.Features.ApplicantScreening.Dto
 
         public string[]? MissingSkills { get; set; }
 
+        // Expected to be one of PASS/FAIL/MANUAL_REVIEW (case-insensitive) - see
+        // AiScreeningStatusMapper.ParseRecommendation. Deliberately not constrained by a
+        // [RegularExpression] here: an unexpected value must still be saved and routed to
+        // Manual Review, not rejected with a 400.
         [MaxLength(200)]
         public string? Recommendation { get; set; }
 
@@ -33,5 +37,11 @@ namespace ai_recruitment.Features.ApplicantScreening.Dto
         public string? Summary { get; set; }
 
         public DateTime? ScreenedAt { get; set; }
+
+        // Always sent by the AI agent alongside ScreeningStatus/Recommendation (see the
+        // combination table in AiScreeningStatusMapper). Required so a missing value can't be
+        // silently misread as false ("no review needed").
+        [Required]
+        public bool? RequiresHumanReview { get; set; }
     }
 }
