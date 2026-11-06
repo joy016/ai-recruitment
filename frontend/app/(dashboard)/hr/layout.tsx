@@ -11,6 +11,7 @@ import SessionGuard from "@/app/component/SessionGuard";
 import PermissionsLoader from "@/app/component/PermissionsLoader";
 import NotificationPanel from "@/app/component/NotificationPanel";
 import { useUnreadNotificationCount } from "@/lib/hooks/useUnreadNotificationCount";
+import { useLiveRefresh } from "@/lib/hooks/useLiveRefresh";
 import { NOTIFICATION_BADGE_MAX } from "@/constant/notifications";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { DASHBOARD_PERMISSIONS, PERMISSIONS } from "@/constant/permissions";
@@ -128,6 +129,10 @@ export default function HrLayout({ children }: { children: React.ReactNode }) {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
   const unreadNotifications = useUnreadNotificationCount(currentUser !== null);
+  // Dashboard-wide polling heartbeat (Candidates table, Needs Manual Review
+  // count, bell, notification panel). A later phase turns this off once
+  // SignalR is connected.
+  useLiveRefresh(currentUser !== null);
   const unreadLabel =
     unreadNotifications.count > NOTIFICATION_BADGE_MAX
       ? `${NOTIFICATION_BADGE_MAX}+`

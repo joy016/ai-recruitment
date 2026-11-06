@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, SyntheticEvent, useEffect, useState } from "react";
+import { Suspense, SyntheticEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Badge,
@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/applicant-status";
 import { Candidate } from "./(types)/candidates.types";
 import { getCandidateList, updateCandidateStatus } from "@/lib/api/candidate";
+import { onCandidatesRefresh } from "@/lib/utils/candidatesRefresh";
 import { getInterviwer } from "@/lib/api/roles";
 import { Interviewer } from "@/lib/types/user";
 import CandidateTable from "./(components)/CandidateTable";
@@ -254,38 +255,80 @@ function CandidateProfileContent() {
     fetchApplicantStatuses();
   }, []);
 
+  // Always-current refs so the silent refetch (triggered by a global event,
+  // not a React dependency change) reads the latest page/filter/tab instead
+  // of whatever was captured when the subscription effect first ran.
+  const jobIdRef = useRef(jobId);
+  const pageNumberRef = useRef(pageNumber);
+  const pageSizeRef = useRef(pageSize);
+  const activeTabRef = useRef(activeTab);
+  const manualReviewStatusRef = useRef(manualReviewStatus);
   useEffect(() => {
-    const fetchCandidates = async () => {
-      setIsLoadingCandidates(true);
-      try {
-        const statusId =
-          activeTab === "manualReview" ? manualReviewStatus?.statusId : undefined;
-        const response = await getCandidateList(jobId, pageNumber, pageSize, statusId);
-        setCandidates(response.data);
-        setTotalCount(response.totalCount);
-      } catch (error) {
-        console.error("Error fetching candidates:", error);
-      } finally {
-        setIsLoadingCandidates(false);
-      }
-    };
-    fetchCandidates();
-  }, [jobId, pageNumber, pageSize, activeTab, manualReviewStatus?.statusId]);
+    jobIdRef.current = jobId;
+    pageNumberRef.current = pageNumber;
+    pageSizeRef.current = pageSize;
+    activeTabRef.current = activeTab;
+    manualReviewStatusRef.current = manualReviewStatus;
+  });
+
+  // Drop responses from superseded requests (a silent refresh racing a
+  // page/filter change, or two silent refreshes overlapping).
+  const candidatesRequestIdRef = useRef(0);
+  const manualReviewRequestIdRef = useRef(0);
+
+  const fetchCandidates = useCallback(async (options?: { silent?: boolean }) => {
+    const requestId = ++candidatesRequestIdRef.current;
+    if (!options?.silent) setIsLoadingCandidates(true);
+    try {
+      const statusId =
+        activeTabRef.current === "manualReview" ? manualReviewStatusRef.current?.statusId : undefined;
+      const response = await getCandidateList(
+        jobIdRef.current,
+        pageNumberRef.current,
+        pageSizeRef.current,
+        statusId,
+      );
+      if (requestId !== candidatesRequestIdRef.current) return; // superseded
+      setCandidates(response.data);
+      setTotalCount(response.totalCount);
+    } catch (error) {
+      console.error("Error fetching candidates:", error);
+    } finally {
+      if (requestId === candidatesRequestIdRef.current) setIsLoadingCandidates(false);
+    }
+  }, []);
+
+  const fetchManualReviewCount = useCallback(async () => {
+    const status = manualReviewStatusRef.current;
+    if (!status) return;
+    const requestId = ++manualReviewRequestIdRef.current;
+    try {
+      const response = await getCandidateList(jobIdRef.current, 1, 1, status.statusId);
+      if (requestId !== manualReviewRequestIdRef.current) return; // superseded
+      setManualReviewCount(response.totalCount);
+    } catch (error) {
+      console.error("Error fetching manual review count:", error);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!manualReviewStatus) {
-      return;
-    }
-    const fetchManualReviewCount = async () => {
-      try {
-        const response = await getCandidateList(jobId, 1, 1, manualReviewStatus.statusId);
-        setManualReviewCount(response.totalCount);
-      } catch (error) {
-        console.error("Error fetching manual review count:", error);
-      }
-    };
+    fetchCandidates();
+  }, [jobId, pageNumber, pageSize, activeTab, manualReviewStatus?.statusId, fetchCandidates]);
+
+  useEffect(() => {
     fetchManualReviewCount();
-  }, [jobId, manualReviewStatus]);
+  }, [jobId, manualReviewStatus, fetchManualReviewCount]);
+
+  // Shared live-refresh heartbeat (and any immediate post-mutation nudge):
+  // refetch both quietly, no spinner, keeping the current page/filters/tab.
+  useEffect(
+    () =>
+      onCandidatesRefresh(() => {
+        void fetchCandidates({ silent: true });
+        void fetchManualReviewCount();
+      }),
+    [fetchCandidates, fetchManualReviewCount],
+  );
 
   const handlePageChange = createMuiPageChangeHandler(setPageNumber);
 

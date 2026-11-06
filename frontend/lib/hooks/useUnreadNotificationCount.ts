@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getUnreadNotificationCount } from "@/lib/api/notifications";
-import { NOTIFICATION_POLL_INTERVAL_MS } from "@/constant/notifications";
 import { onNotificationsRefresh } from "@/lib/utils/notificationRefresh";
 
 /**
  * Unread count for the header bell. Refreshes on mount, when the window
- * regains focus, on the shared "notifications:refresh" event (fired after
- * actions that can create notifications, or a future push), and on an
- * interval that pauses while the tab is hidden.
+ * regains focus, and on the shared "notifications:refresh" event - fired
+ * after actions that can create notifications, by the dashboard-wide
+ * useLiveRefresh heartbeat (see lib/hooks/useLiveRefresh.ts), or by a future
+ * SignalR push. The interval itself lives in useLiveRefresh, not here.
  */
 export function useUnreadNotificationCount(enabled: boolean) {
   const [count, setCount] = useState(0);
@@ -41,25 +41,6 @@ export function useUnreadNotificationCount(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
 
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const stopPolling = () => {
-      if (timer !== undefined) clearInterval(timer);
-      timer = undefined;
-    };
-    const startPolling = () => {
-      stopPolling();
-      timer = setInterval(refresh, NOTIFICATION_POLL_INTERVAL_MS);
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        void refresh();
-        startPolling();
-      } else {
-        stopPolling();
-      }
-    };
-
     // Initial load (same as refresh(), as a chain so no setState runs in the effect body).
     const initialRequestId = ++requestIdRef.current;
     getUnreadNotificationCount()
@@ -68,14 +49,19 @@ export function useUnreadNotificationCount(enabled: boolean) {
       })
       .catch(() => {});
 
-    if (document.visibilityState === "visible") startPolling();
+    // Also refetch immediately on visibility regain - useLiveRefresh's own
+    // visibility handling only guarantees the next heartbeat, not an
+    // immediate one, so this keeps the bell snappy on tab-switch too.
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("focus", refresh);
     const unsubscribe = onNotificationsRefresh(refresh);
 
     return () => {
       unsubscribe();
-      stopPolling();
       document.removeEventListener("visibilitychange", handleVisibility);
       window.removeEventListener("focus", refresh);
     };
