@@ -5,6 +5,7 @@ using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.controller;
 using ai_recruitment.Features.Candidates.Dto;
 using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.Candidates.Realtime;
 using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
@@ -36,7 +37,7 @@ namespace ai_recruitment.Tests.Features.Candidates
 
         private class NoOpScreeningRequestPublisher : IScreeningRequestPublisher
         {
-            public Task PublishAsync(Candidate candidate, CancellationToken cancellationToken = default) => Task.CompletedTask;
+            public Task<bool> PublishAsync(Candidate candidate, CancellationToken cancellationToken = default) => Task.FromResult(true);
         }
 
         private class NoOpSupabaseStorageService : ISupabaseStorageService
@@ -47,6 +48,11 @@ namespace ai_recruitment.Tests.Features.Candidates
             public Task<string> UploadAsync(string bucket, string path, Stream content, string contentType) => Task.FromResult(string.Empty);
             public Task<string> CreateSignedUrlAsync(string bucket, string path, int expiresInSeconds) => Task.FromResult(string.Empty);
             public Task DeleteAsync(string bucket, string path) => Task.CompletedTask;
+        }
+
+        private class NoOpCandidateRealtimeNotifier : ICandidateRealtimeNotifier
+        {
+            public Task NotifyCandidateChangedAsync(Guid candidateId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         }
 
         private class NoOpNotificationService : INotificationService
@@ -111,7 +117,7 @@ namespace ai_recruitment.Tests.Features.Candidates
 
             var publisher = new FakeCandidateStatusWebhookPublisher();
             var notificationService = new NoOpNotificationService();
-            var statusChangeService = new CandidateStatusChangeService(context, notificationService, publisher);
+            var statusChangeService = new CandidateStatusChangeService(context, notificationService, publisher, new NoOpCandidateRealtimeNotifier());
 
             var controller = new CandidatesController(
                 context,
@@ -122,7 +128,8 @@ namespace ai_recruitment.Tests.Features.Candidates
                 supabaseStorageService: new NoOpSupabaseStorageService(),
                 notificationService: notificationService,
                 candidateStatusWebhookPublisher: publisher,
-                candidateStatusChangeService: statusChangeService);
+                candidateStatusChangeService: statusChangeService,
+                realtimeNotifier: new NoOpCandidateRealtimeNotifier());
 
             var httpContext = new DefaultHttpContext
             {

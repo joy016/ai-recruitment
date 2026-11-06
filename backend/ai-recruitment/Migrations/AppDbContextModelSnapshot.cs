@@ -170,6 +170,16 @@ namespace ai_recruitment.Migrations
                         },
                         new
                         {
+                            StatusId = 13,
+                            Color = "#94A3B8",
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Description = "Application received and awaiting AI screening",
+                            IsActive = true,
+                            SortOrder = 1,
+                            StatusName = "Screening"
+                        },
+                        new
+                        {
                             StatusId = 2,
                             Color = "#3B82F6",
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
@@ -439,6 +449,9 @@ namespace ai_recruitment.Migrations
                     b.HasIndex("JobOfferFacilitatorId");
 
                     b.HasIndex("OnboardingFacilitatorId");
+
+                    b.HasIndex("EmailAddress", "JobId")
+                        .IsUnique();
 
                     b.ToTable("Candidates");
                 });

@@ -30,13 +30,17 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
     {
         public const string AiScreeningPassedStatusName = "AI Screening passed";
         public const string ManualReviewStatusName = "Manual Review";
+        public const string ScreeningStatusName = "Screening";
 
         // Candidate statuses an inbound screening result is allowed to auto-advance from.
         // Anything else means a recruiter already moved the candidate past screening, and
-        // this callback must never overwrite that decision.
+        // this callback must never overwrite that decision. "Application Submitted" is kept
+        // for backward compatibility with candidates created before ScreeningStatusName
+        // became the default initial status.
         private static readonly HashSet<string> EligibleCurrentStatusNames = new(StringComparer.OrdinalIgnoreCase)
         {
             "Application Submitted",
+            ScreeningStatusName,
             ManualReviewStatusName,
         };
 

@@ -58,6 +58,12 @@ namespace ai_recruitment.Data
               .WithMany(j => j.Candidates)
              .HasForeignKey(j => j.JobId);
 
+            // A person may apply to multiple different jobs, but not submit the same
+            // application (email + job) twice.
+            modelBuilder.Entity<Candidate>()
+                .HasIndex(c => new { c.EmailAddress, c.JobId })
+                .IsUnique();
+
             modelBuilder.Entity<Candidate>()
               .HasOne(c => c.Interviewer)
               .WithMany(u => u.InterviewedCandidates)
@@ -269,6 +275,7 @@ namespace ai_recruitment.Data
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(
                 new ApplicantStatus { StatusId = 1, StatusName = "Application Submitted", Description = "Candidate submitted application", Color = "#3B82F6", SortOrder = 1, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
+                new ApplicantStatus { StatusId = 13, StatusName = "Screening", Description = "Application received and awaiting AI screening", Color = "#94A3B8", SortOrder = 1, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
                 new ApplicantStatus { StatusId = 2, StatusName = "AI Screening passed", Description = "Candidate passed AI screening", Color = "#3B82F6", SortOrder = 2, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
                 new ApplicantStatus { StatusId = 12, StatusName = "Manual Review", Description = "AI screening flagged this candidate for a recruiter to review", Color = "#FBBF24", SortOrder = 3, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },
                 new ApplicantStatus { StatusId = 3, StatusName = "Initial Interview", Description = "Candidate is scheduled for an initial interview", Color = "#8B5CF6", SortOrder = 4, IsActive = true, CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc) },

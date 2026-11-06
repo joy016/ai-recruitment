@@ -27,7 +27,7 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
             _logger = logger;
         }
 
-        public async Task PublishAsync(Candidate candidate, CancellationToken cancellationToken = default)
+        public async Task<bool> PublishAsync(Candidate candidate, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -42,7 +42,7 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
                     _logger.LogError(
                         "Cannot publish applicant-screening event: Job {JobId} referenced by Candidate {CandidateId} was not found.",
                         candidate.JobId, candidate.Id);
-                    return;
+                    return false;
                 }
 
                 if (job.Qualifications.Length == 0)
@@ -120,12 +120,14 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
                 // Fire-and-forget nudge; the periodic sweep in ScreeningOutboxDispatcher
                 // still picks this row up even if nobody is listening right now.
                 _channel.SignalPending(outboxEntry.Id);
+                return true;
             }
             catch (Exception ex)
             {
                 // Never let a screening-publish failure fail the candidate submission that
                 // already succeeded.
                 _logger.LogError(ex, "Failed to enqueue applicant-screening event for Candidate {CandidateId}.", candidate.Id);
+                return false;
             }
         }
     }

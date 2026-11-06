@@ -1,5 +1,6 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.Candidates.Realtime;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
 using Microsoft.EntityFrameworkCore;
@@ -14,15 +15,18 @@ namespace ai_recruitment.Features.Candidates.Services
         private readonly AppDbContext _context;
         private readonly INotificationService _notificationService;
         private readonly ICandidateStatusWebhookPublisher _candidateStatusWebhookPublisher;
+        private readonly ICandidateRealtimeNotifier _realtimeNotifier;
 
         public CandidateStatusChangeService(
             AppDbContext context,
             INotificationService notificationService,
-            ICandidateStatusWebhookPublisher candidateStatusWebhookPublisher)
+            ICandidateStatusWebhookPublisher candidateStatusWebhookPublisher,
+            ICandidateRealtimeNotifier realtimeNotifier)
         {
             _context = context;
             _notificationService = notificationService;
             _candidateStatusWebhookPublisher = candidateStatusWebhookPublisher;
+            _realtimeNotifier = realtimeNotifier;
         }
 
         public bool StageStatusChange(Candidate candidate, int newStatusId)
@@ -44,42 +48,53 @@ namespace ai_recruitment.Features.Candidates.Services
             string? changedBy,
             CancellationToken cancellationToken = default)
         {
-            var statusName = await _context.ApplicantStatuses
-                .AsNoTracking()
-                .Where(s => s.StatusId == newStatusId)
-                .Select(s => s.StatusName)
-                .FirstOrDefaultAsync(cancellationToken) ?? "a new stage";
-
-            await _notificationService.NotifyAsync(
-                NotificationType.CandidateStatusChanged,
-                new NotificationContext
-                {
-                    Severity = NotificationSeverity.Info,
-                    Title = "Candidate Status Changed",
-                    Message = $"{candidate.FirstName} {candidate.LastName} moved to {statusName}.",
-                    CandidateId = candidate.Id,
-                    JobId = candidate.JobId,
-                },
-                $"status:{candidate.Id}:{newStatusId}",
-                cancellationToken);
-
-            // Candidate status-change emails (interview/offer/onboarding/rejection) via n8n -
-            // only for the specific statuses CandidateStatusNotifications knows about (the "a
-            // new stage" fallback above never matches that set).
-            if (CandidateStatusNotifications.TryGetEmailType(statusName, out _))
+            try
             {
-                var previousStatusName = await _context.ApplicantStatuses
+                var statusName = await _context.ApplicantStatuses
                     .AsNoTracking()
-                    .Where(s => s.StatusId == previousStatusId)
+                    .Where(s => s.StatusId == newStatusId)
                     .Select(s => s.StatusName)
-                    .FirstOrDefaultAsync(cancellationToken);
+                    .FirstOrDefaultAsync(cancellationToken) ?? "a new stage";
 
-                await _candidateStatusWebhookPublisher.PublishAsync(
-                    candidate,
-                    previousStatusName,
-                    statusName,
-                    changedBy,
+                await _notificationService.NotifyAsync(
+                    NotificationType.CandidateStatusChanged,
+                    new NotificationContext
+                    {
+                        Severity = NotificationSeverity.Info,
+                        Title = "Candidate Status Changed",
+                        Message = $"{candidate.FirstName} {candidate.LastName} moved to {statusName}.",
+                        CandidateId = candidate.Id,
+                        JobId = candidate.JobId,
+                    },
+                    $"status:{candidate.Id}:{newStatusId}",
                     cancellationToken);
+
+                // Candidate status-change emails (interview/offer/onboarding/rejection) via n8n -
+                // only for the specific statuses CandidateStatusNotifications knows about (the "a
+                // new stage" fallback above never matches that set).
+                if (CandidateStatusNotifications.TryGetEmailType(statusName, out _))
+                {
+                    var previousStatusName = await _context.ApplicantStatuses
+                        .AsNoTracking()
+                        .Where(s => s.StatusId == previousStatusId)
+                        .Select(s => s.StatusName)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                    await _candidateStatusWebhookPublisher.PublishAsync(
+                        candidate,
+                        previousStatusName,
+                        statusName,
+                        changedBy,
+                        cancellationToken);
+                }
+            }
+            finally
+            {
+                // The status is already saved by the caller, so the HR UI must refresh even if
+                // the notification or webhook enqueue above threw. Covers the HR status update,
+                // the AI-screening callback and both Manual Review fallbacks. Never throws.
+                // CancellationToken.None: a client disconnect must not skip the push.
+                await _realtimeNotifier.NotifyCandidateChangedAsync(candidate.Id, CancellationToken.None);
             }
         }
     }

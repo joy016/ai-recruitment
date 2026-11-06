@@ -15,6 +15,8 @@ namespace ai_recruitment.Features.Candidates.Services
         // in-app "status changed" notification and, if the new status is one
         // CandidateStatusNotifications knows about, enqueues the candidate.status.changed
         // webhook - identical side effects regardless of caller (HR UI vs. AI screening).
+        // Always ends by pushing "CandidatesChanged" over SignalR (ICandidateRealtimeNotifier),
+        // even if the notification or webhook step throws.
         Task NotifyStatusChangedAsync(
             Candidate candidate,
             int previousStatusId,

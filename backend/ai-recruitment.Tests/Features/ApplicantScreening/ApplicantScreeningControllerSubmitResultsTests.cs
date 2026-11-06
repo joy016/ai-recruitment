@@ -4,6 +4,7 @@ using ai_recruitment.Features.ApplicantScreening.Dto;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.ApplicationStatuses.Model;
 using ai_recruitment.Features.Candidates.model;
+using ai_recruitment.Features.Candidates.Realtime;
 using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.JobPosts.Model;
 using ai_recruitment.Features.Notifications;
@@ -34,6 +35,11 @@ namespace ai_recruitment.Tests.Features.ApplicantScreening
                 CallCount++;
                 return Task.CompletedTask;
             }
+        }
+
+        private class NoOpCandidateRealtimeNotifier : ICandidateRealtimeNotifier
+        {
+            public Task NotifyCandidateChangedAsync(Guid candidateId, CancellationToken cancellationToken = default) => Task.CompletedTask;
         }
 
         private class FakeNotificationService : INotificationService
@@ -99,7 +105,7 @@ namespace ai_recruitment.Tests.Features.ApplicantScreening
 
             var notifications = new FakeNotificationService();
             var publisher = new FakeCandidateStatusWebhookPublisher();
-            var statusChangeService = new CandidateStatusChangeService(context, notifications, publisher);
+            var statusChangeService = new CandidateStatusChangeService(context, notifications, publisher, new NoOpCandidateRealtimeNotifier());
 
             var controller = new ApplicantScreeningController(
                 context,

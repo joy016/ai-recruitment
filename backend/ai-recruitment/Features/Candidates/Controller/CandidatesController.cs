@@ -3,6 +3,7 @@ using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.Candidates;
 using ai_recruitment.Features.Candidates.Dto;
+using ai_recruitment.Features.Candidates.Realtime;
 using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
@@ -43,6 +44,7 @@ namespace ai_recruitment.Features.Candidates.controller
         private readonly INotificationService _notificationService;
         private readonly ICandidateStatusWebhookPublisher _candidateStatusWebhookPublisher;
         private readonly ICandidateStatusChangeService _candidateStatusChangeService;
+        private readonly ICandidateRealtimeNotifier _realtimeNotifier;
 
         public CandidatesController(
             AppDbContext context,
@@ -53,7 +55,8 @@ namespace ai_recruitment.Features.Candidates.controller
             ISupabaseStorageService supabaseStorageService,
             INotificationService notificationService,
             ICandidateStatusWebhookPublisher candidateStatusWebhookPublisher,
-            ICandidateStatusChangeService candidateStatusChangeService)
+            ICandidateStatusChangeService candidateStatusChangeService,
+            ICandidateRealtimeNotifier realtimeNotifier)
         {
             _context = context;
             _httpClientFactory = httpClientFactory;
@@ -64,67 +67,30 @@ namespace ai_recruitment.Features.Candidates.controller
             _notificationService = notificationService;
             _candidateStatusWebhookPublisher = candidateStatusWebhookPublisher;
             _candidateStatusChangeService = candidateStatusChangeService;
+            _realtimeNotifier = realtimeNotifier;
         }
 
 
         [HttpPost]
         [Consumes("multipart/form-data")]
         [HasPermission(PermissionNames.Candidates.Create)]
-        public async Task<IActionResult> CreateCandidate(
-            [FromForm] CreateCandidateDto dto)
+        public async Task<IActionResult> CreateCandidate([FromForm] CreateCandidateDto dto)
         {
-            // Check if email already exists
-            var existingCandidate = await _context.Candidates
-                .FirstOrDefaultAsync(c => c.EmailAddress == dto.Email);
-
-            if (existingCandidate != null)
-            {
-                return Conflict(new
-                {
-                    message = "A candidate with this email already exists."
-                });
-            }
-
-            // The screening webhook depends entirely on the referenced Job existing, so
-            // this is validated up front instead of letting a bad JobId surface later as
-            // an FK violation on SaveChangesAsync. The title doubles as the "new applicant"
-            // notification message content further down.
-            var jobTitle = await _context.Jobs
-                .Where(j => j.JobId == dto.JobId)
-                .Select(j => j.JobTitle)
-                .FirstOrDefaultAsync();
-
-            if (jobTitle == null)
-            {
-                return BadRequest(new
-                {
-                    message = "The selected job could not be found."
-                });
-            }
-
-            // Validate resume
+            // ---- 1. Cheap validation first (no DB / network) ----------------------
             if (dto.Resume == null || dto.Resume.Length == 0)
             {
-                return BadRequest(new
-                {
-                    message = "Resume is required."
-                });
+                return BadRequest(new { message = "Resume is required." });
             }
 
             if (dto.Resume.Length > MaxResumeFileSize)
             {
-                return BadRequest(new
-                {
-                    message = "Resume file size cannot exceed 5MB."
-                });
+                return BadRequest(new { message = "Resume file size cannot exceed 5MB." });
             }
 
             var extension = Path.GetExtension(dto.Resume.FileName).ToLowerInvariant();
 
-            // Buffered once (max 5MB) and reused for: the file-signature check below, the
-            // Supabase upload, and the existing "candidate-created" webhook's multipart
-            // attachment further down - IFormFile's own backing stream is only reliably
-            // readable once per request.
+            // Buffered once (max 5MB): reused for the signature check and the Supabase
+            // upload. IFormFile's backing stream is only reliably readable once.
             byte[] resumeBytes;
             using (var buffer = new MemoryStream())
             {
@@ -137,8 +103,35 @@ namespace ai_recruitment.Features.Candidates.controller
                 return BadRequest(new { message = validationError });
             }
 
-            // Generated up front (rather than left to EF/Postgres) so it can be used to
-            // build the Supabase storage path before the Candidate row exists.
+            // ---- 2. DB validation --------------------------------------------------
+            var alreadyApplied = await _context.Candidates
+                .AnyAsync(c => c.EmailAddress == dto.Email && c.JobId == dto.JobId);
+
+            if (alreadyApplied)
+            {
+                return Conflict(new { message = "You have already applied for this job with this email address." });
+            }
+
+            // Screening depends on the Job existing; validate up front instead of
+            // surfacing a bad JobId later as an FK violation. The title is also used
+            // for the "new applicant" notification.
+            var jobTitle = await _context.Jobs
+                .Where(j => j.JobId == dto.JobId)
+                .Select(j => j.JobTitle)
+                .FirstOrDefaultAsync();
+
+            if (jobTitle == null)
+            {
+                return BadRequest(new { message = "The selected job could not be found." });
+            }
+
+            var screeningStatusId = await _context.ApplicantStatuses
+                .Where(s => s.StatusName == AiScreeningStatusMapper.ScreeningStatusName)
+                .Select(s => (int?)s.StatusId)
+                .FirstOrDefaultAsync() ?? 1;
+
+            // ---- 3. Upload resume --------------------------------------------------
+            // Generated up front so the storage path can be built before the row exists.
             var candidateId = Guid.NewGuid();
             var storagePath = $"candidates/{candidateId}/{Guid.NewGuid()}{extension}";
 
@@ -157,7 +150,7 @@ namespace ai_recruitment.Features.Candidates.controller
                 });
             }
 
-            // Create candidate
+            // ---- 4. Save candidate -------------------------------------------------
             var candidate = new model.Candidate
             {
                 Id = candidateId,
@@ -169,16 +162,13 @@ namespace ai_recruitment.Features.Candidates.controller
                 LinkedInProfile = dto.LinkedInUrl,
                 CoverLetter = dto.CoverLetter,
                 ResumeFileName = dto.Resume.FileName,
-                // The Supabase object path (bucket is config, not stored per-row) - not a
-                // URL. Signed download URLs are generated on demand and never persisted.
+                // Supabase object path (bucket is config), not a URL. Signed download
+                // URLs are generated on demand and never persisted.
                 ResumeFilePath = storagePath,
                 Role = dto.Role,
                 JobId = dto.JobId,
                 SourcOfApplication = dto.SourceOfApplication,
-
-                // Initial status
-                ApplicantStatusId = 1,
-
+                ApplicantStatusId = screeningStatusId, // Awaiting AI screening
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -188,10 +178,19 @@ namespace ai_recruitment.Features.Candidates.controller
             {
                 await _context.SaveChangesAsync();
             }
+            catch (DbUpdateException ex) when (IsUniqueEmailJobViolation(ex))
+            {
+                // Belt-and-suspenders for the app-level check above: a concurrent duplicate
+                // submission that slipped past it is still caught here by the DB's unique
+                // (EmailAddress, JobId) index.
+                _logger.LogWarning(ex, "Duplicate candidate submission (email+job) for Candidate {CandidateId}; cleaning up the uploaded resume.", candidateId);
+                await _supabaseStorageService.DeleteAsync(_supabaseStorageService.ResumeBucket, storagePath);
+
+                return Conflict(new { message = "You have already applied for this job with this email address." });
+            }
             catch (DbUpdateException ex)
             {
-                // Compensate: the resume already made it to Supabase, but the applicant
-                // record didn't - don't leave an orphaned file or an incomplete record.
+                // Compensate: the resume is in Supabase but the record isn't saved.
                 _logger.LogError(ex, "Failed to save Candidate {CandidateId} after resume upload; cleaning up the uploaded resume.", candidateId);
                 await _supabaseStorageService.DeleteAsync(_supabaseStorageService.ResumeBucket, storagePath);
 
@@ -201,102 +200,90 @@ namespace ai_recruitment.Features.Candidates.controller
                 });
             }
 
-
-            // Candidate now has its generated ID because SaveChangesAsync() has completed.
-
-            await _notificationService.NotifyAsync(
-                NotificationType.NewApplicant,
-                new NotificationContext
-                {
-                    Severity = NotificationSeverity.Info,
-                    Title = "New Applicant",
-                    Message = $"{candidate.FirstName} {candidate.LastName} applied for {jobTitle}.",
-                    CandidateId = candidate.Id,
-                    JobId = candidate.JobId,
-                },
-                $"applicant:{candidate.Id}",
-                HttpContext.RequestAborted);
-
-            // Dynamic AI screening: writes a durable outbox row (see ScreeningWebhookOutbox)
-            // keyed off candidate.JobId and signals the background dispatcher to deliver it.
-            // This never throws and never delays the response below - if n8n is unreachable,
-            // the dispatcher retries later and the candidate submission still succeeds.
-            await _screeningRequestPublisher.PublishAsync(candidate, HttpContext.RequestAborted);
-
-            // Build multipart/form-data content to send candidate data + actual resume file
-            var httpClient = _httpClientFactory.CreateClient();
-            var webhookUrl = _configuration["N8n:applicationSubmittedWebhookUrl"];
-
-            // Prepare form fields
-            using var form = new MultipartFormDataContent();
-
-            static HttpContent Field(string? value)
-            {
-                var c = new StringContent(value ?? string.Empty);
-                c.Headers.ContentType = null; // n8n treats any part with a Content-Type as binary
-                return c;
-            }
-
-            form.Add(Field(candidate.Id.ToString()), "candidateId");
-            form.Add(Field(candidate.FirstName ?? string.Empty), "firstName");
-            form.Add(Field(candidate.LastName ?? string.Empty), "lastName");
-            form.Add(Field(candidate.EmailAddress ?? string.Empty), "email");
-            form.Add(Field(candidate.PhoneNumber ?? string.Empty), "phoneNumber");
-            form.Add(Field(candidate.YearsOfExperience.ToString()), "yearsOfExperience");
-            form.Add(Field(candidate.PortfolioLink ?? string.Empty), "portfolioLink");
-            form.Add(Field(candidate.CoverLetter ?? string.Empty), "coverLetter");
-            form.Add(Field(candidate.ResumeFileName ?? string.Empty), "resumeFileName");
-            form.Add(Field(candidate.Role ?? string.Empty), "role");
-            form.Add(Field(candidate.SourcOfApplication ?? string.Empty), "sourceOfApplication");
-            form.Add(Field(candidate.ApplicantStatusId.ToString()), "applicantStatusId");
+            // ---- 5. Post-save side effects ----------------------------------------
+            // The candidate is saved, so nothing below may fail the request. We also use
+            // CancellationToken.None: if the browser aborts (e.g. timeout), we still want
+            // the notification and the screening outbox row to be written.
 
             try
             {
-                using var resumeStream = new MemoryStream(resumeBytes);
-                var streamContent = new StreamContent(resumeStream);
-                streamContent.Headers.ContentType = new MediaTypeHeaderValue(dto.Resume.ContentType);
+                await _notificationService.NotifyAsync(
+                    NotificationType.NewApplicant,
+                    new NotificationContext
+                    {
+                        Severity = NotificationSeverity.Info,
+                        Title = "New Applicant",
+                        Message = $"{candidate.FirstName} {candidate.LastName} applied for {jobTitle}.",
+                        CandidateId = candidate.Id,
+                        JobId = candidate.JobId,
+                    },
+                    $"applicant:{candidate.Id}",
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send new-applicant notification for Candidate {CandidateId}.", candidate.Id);
+            }
 
-                // 'resume' is the required multipart field name
-                form.Add(streamContent, "resume", candidate.ResumeFileName!);
-
-                // Post the multipart form
-                HttpResponseMessage response;
-                try
+            try
+            {
+                // Writes a durable outbox row and signals the background dispatcher,
+                // which calls the n8n screening webhook. Never blocks on n8n.
+                var enqueued = await _screeningRequestPublisher.PublishAsync(candidate, CancellationToken.None);
+                if (!enqueued)
                 {
-                    response = await httpClient.PostAsync(webhookUrl, form);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to POST candidate resume to n8n webhook '{WebhookUrl}' for Candidate {CandidateId}", webhookUrl, candidate.Id);
-                    // Do not fail the request - candidate already saved successfully
-                    return CreatedAtAction(
-                        nameof(GetCandidate),
-                        new { id = candidate.Id },
-                        candidate
-                    );
-                }
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    var body = await response.Content.ReadAsStringAsync();
-                    _logger.LogWarning("n8n webhook returned non-success status {StatusCode} for Candidate {CandidateId}. Response body: {Body}", response.StatusCode, candidate.Id, body);
-                }
-                else
-                {
-                    _logger.LogInformation("Successfully posted candidate {CandidateId} to n8n webhook {WebhookUrl}", candidate.Id, webhookUrl);
+                    await FallbackToManualReviewAsync(candidate, CancellationToken.None);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error attaching resume to n8n webhook request for Candidate {CandidateId}", candidate.Id);
+                _logger.LogError(ex, "Failed to enqueue screening request for Candidate {CandidateId}.", candidate.Id);
+                await FallbackToManualReviewAsync(candidate, CancellationToken.None);
             }
 
-            return CreatedAtAction(
-                nameof(GetCandidate),
-                new { id = candidate.Id },
-                candidate
-            );
+            // New row for the HR candidates list. Never throws; a fallback above may already have
+            // pushed one via NotifyStatusChangedAsync - a duplicate refetch is harmless.
+            await _realtimeNotifier.NotifyCandidateChangedAsync(candidate.Id, CancellationToken.None);
+
+            return CreatedAtAction(nameof(GetCandidate), new { id = candidate.Id }, candidate);
         }
+
+        // The candidate must never be silently lost just because the screening event
+        // couldn't be enqueued - surface it under Manual Review instead.
+        private async Task FallbackToManualReviewAsync(model.Candidate candidate, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var manualReviewStatusId = await _context.ApplicantStatuses
+                    .Where(s => s.StatusName == AiScreeningStatusMapper.ManualReviewStatusName)
+                    .Select(s => (int?)s.StatusId)
+                    .FirstOrDefaultAsync(cancellationToken);
+
+                if (!manualReviewStatusId.HasValue)
+                {
+                    _logger.LogError("Manual Review status is not seeded; cannot fall back Candidate {CandidateId}.", candidate.Id);
+                    return;
+                }
+
+                var previousStatusId = candidate.ApplicantStatusId;
+                if (!_candidateStatusChangeService.StageStatusChange(candidate, manualReviewStatusId.Value))
+                {
+                    return;
+                }
+
+                await _context.SaveChangesAsync(cancellationToken);
+                await _candidateStatusChangeService.NotifyStatusChangedAsync(
+                    candidate, previousStatusId, manualReviewStatusId.Value, "System", cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to fall back Candidate {CandidateId} to Manual Review after a screening-enqueue failure.", candidate.Id);
+            }
+        }
+
+        private static bool IsUniqueEmailJobViolation(DbUpdateException ex) =>
+            ex.InnerException is Npgsql.PostgresException pgEx
+                && pgEx.SqlState == Npgsql.PostgresErrorCodes.UniqueViolation;
 
         [HttpGet("{id}")]
         [HasPermission(PermissionNames.Candidates.View)]
@@ -398,14 +385,13 @@ namespace ai_recruitment.Features.Candidates.controller
                 query = query.Where(c => c.ApplicantStatusId == statusId.Value);
             }
 
-            query = query.OrderBy(c => c.CreatedAt);
+            query = query.OrderByDescending(c => c.CreatedAt);
             var totalCount = await query.CountAsync();
 
             // 3. Apply offset math and execute query
             var candidates = await query
                 .Skip((pageNumber.GetValueOrDefault(1) - 1) * pageSize.GetValueOrDefault(10))
                 .Take(pageSize.GetValueOrDefault(10))
-                .OrderByDescending(c => c.CreatedAt)
                 .Select(c => new CandidateListDto
                 {
                     Id = c.Id,
@@ -441,9 +427,15 @@ namespace ai_recruitment.Features.Candidates.controller
         [HasPermission(PermissionNames.Candidates.View)]
         public async Task<IActionResult> GetNewCandidates([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
+            // "New" means awaiting AI screening. "Application Submitted" is kept alongside
+            // "Screening" for candidates created before Screening became the initial status.
+            var newApplicantStatusIds = await _context.ApplicantStatuses
+                .Where(s => s.StatusName == AiScreeningStatusMapper.ScreeningStatusName || s.StatusName == "Application Submitted")
+                .Select(s => s.StatusId)
+                .ToListAsync();
 
             var query = _context.Candidates.AsNoTracking()
-                        .Where(c => c.ApplicantStatusId == 1)
+                        .Where(c => newApplicantStatusIds.Contains(c.ApplicantStatusId))
                         .AsQueryable();
 
             var totalCount = await query.CountAsync();
@@ -468,24 +460,6 @@ namespace ai_recruitment.Features.Candidates.controller
                 pageSize,
                 TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
             });
-
-            //var newCandidates = await _context.Candidates
-            //    .Where(c => c.ApplicantStatusId == 1)
-            //    .Select(c => new NewCandidateListDto
-            //    {
-            //        CandidateId = c.Id,
-            //        CandidateName = c.FirstName + " " + c.LastName,
-            //        Position = c.Role,
-            //        AppliedDate = c.CreatedAt,
-            //        WorkExperience = c.YearsOfExperience.ToString(),
-            //        ApplicationSource = c.SourcOfApplication
-            //    })
-            //    .ToListAsync();
-            //return Ok(new
-            //{
-            //    Candidates = newCandidates,
-            //    Status = 200
-            //});
         }
 
         [HttpPut("updateCandidateStatus")]
@@ -558,6 +532,12 @@ namespace ai_recruitment.Features.Candidates.controller
                     changedBy,
                     HttpContext.RequestAborted);
             }
+            else
+            {
+                // Schedule/interviewer/facilitator-only edit: NotifyStatusChangedAsync (which
+                // pushes the realtime event) did not run, so push it here.
+                await _realtimeNotifier.NotifyCandidateChangedAsync(candidate.Id, CancellationToken.None);
+            }
 
             return Ok(new
             {
@@ -628,6 +608,8 @@ namespace ai_recruitment.Features.Candidates.controller
 
             _context.Candidates.Remove(candidate);
             await _context.SaveChangesAsync();
+
+            await _realtimeNotifier.NotifyCandidateChangedAsync(id, CancellationToken.None);
 
             return NoContent();
         }

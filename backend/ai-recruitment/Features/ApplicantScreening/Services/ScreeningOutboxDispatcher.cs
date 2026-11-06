@@ -1,5 +1,6 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Model;
+using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
 using Microsoft.EntityFrameworkCore;
@@ -111,6 +112,7 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var webhookService = scope.ServiceProvider.GetRequiredService<IApplicantScreeningWebhookService>();
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var candidateStatusChangeService = scope.ServiceProvider.GetRequiredService<ICandidateStatusChangeService>();
 
             // Atomically claims the row (Pending -> Sending) before sending anything, so the
             // instant signal and the periodic sweep can never both deliver the same event -
@@ -168,6 +170,11 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
                         $"system:outbox-failed:{entry.Id}",
                         stoppingToken,
                         critical: true);
+
+                    // The candidate must not be lost just because n8n never got the event -
+                    // surface it under Manual Review instead, unless a recruiter already
+                    // moved it past screening themselves.
+                    await FallbackToManualReviewAsync(context, candidateStatusChangeService, entry.CandidateId, stoppingToken);
                 }
                 else
                 {
@@ -182,6 +189,51 @@ namespace ai_recruitment.Features.ApplicantScreening.Services
             }
 
             await context.SaveChangesAsync(stoppingToken);
+        }
+
+        private static async Task FallbackToManualReviewAsync(
+            AppDbContext context,
+            ICandidateStatusChangeService candidateStatusChangeService,
+            Guid candidateId,
+            CancellationToken cancellationToken)
+        {
+            var candidate = await context.Candidates.FirstOrDefaultAsync(c => c.Id == candidateId, cancellationToken);
+            if (candidate == null)
+            {
+                return;
+            }
+
+            var currentStatusName = await context.ApplicantStatuses
+                .AsNoTracking()
+                .Where(s => s.StatusId == candidate.ApplicantStatusId)
+                .Select(s => s.StatusName)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!AiScreeningStatusMapper.IsEligibleForAutoUpdate(currentStatusName))
+            {
+                return;
+            }
+
+            var manualReviewStatusId = await context.ApplicantStatuses
+                .AsNoTracking()
+                .Where(s => s.StatusName == AiScreeningStatusMapper.ManualReviewStatusName)
+                .Select(s => (int?)s.StatusId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (!manualReviewStatusId.HasValue)
+            {
+                return;
+            }
+
+            var previousStatusId = candidate.ApplicantStatusId;
+            if (!candidateStatusChangeService.StageStatusChange(candidate, manualReviewStatusId.Value))
+            {
+                return;
+            }
+
+            await context.SaveChangesAsync(cancellationToken);
+            await candidateStatusChangeService.NotifyStatusChangedAsync(
+                candidate, previousStatusId, manualReviewStatusId.Value, "System", cancellationToken);
         }
     }
 }

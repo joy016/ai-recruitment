@@ -1,6 +1,7 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.ApplicantScreening.Services;
 using ai_recruitment.Features.Authorization;
+using ai_recruitment.Features.Candidates.Realtime;
 using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Dashboard.Services;
 using ai_recruitment.Features.Inbox.Services;
@@ -65,6 +66,23 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key),
         ClockSkew = TimeSpan.Zero // optional: remove default 5 min leeway
+    };
+
+    // SignalR: browsers can't send an Authorization header on WebSocket/SSE connections, so
+    // the client passes the JWT as ?access_token=... . Only honoured for /hubs paths, so every
+    // other endpoint (including the n8n callbacks) still only accepts the header.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(accessToken) && context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        },
     };
 });
 
@@ -172,6 +190,11 @@ builder.Services.AddSingleton<CandidateStatusOutboxChannel>();
 builder.Services.AddScoped<ICandidateStatusWebhookPublisher, CandidateStatusWebhookPublisher>();
 builder.Services.AddScoped<ICandidateStatusChangeService, CandidateStatusChangeService>();
 builder.Services.AddHostedService<CandidateStatusOutboxDispatcher>();
+
+// Realtime "CandidatesChanged" push to the HR UI (Features/Candidates/Realtime). Singleton so
+// both scoped services and background dispatchers can use it.
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ICandidateRealtimeNotifier, CandidateRealtimeNotifier>();
 
 // Notifications: panel/bell + per-category preferences (see Features/Notifications).
 builder.Services.AddScoped<INotificationService, NotificationService>();
@@ -408,6 +431,7 @@ app.UseAuthorization();
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.MapControllers();
+app.MapHub<CandidatesHub>(CandidatesHub.Path);
 
 app.Run();
 
