@@ -496,16 +496,21 @@ function CandidateProfileContent() {
 
     // Job Offer and Onboarding have their own schedule and facilitator
     // fields; every other status keeps using the interview fields.
+    // Statuses without a schedule (e.g. Manual Review) send null, never "".
     const nextStatusName = getStatusName(nextStatusId);
+    const payloadSchedule =
+      shouldOpenScheduleModal(nextStatusId) && nextSchedule
+        ? nextSchedule
+        : null;
     const scheduleFields =
       nextStatusName === "Job Offer"
-        ? { jobOfferSched: nextSchedule, jobOfferFacilitatorId: interviewerId }
+        ? { jobOfferSched: payloadSchedule, jobOfferFacilitatorId: interviewerId }
         : nextStatusName === "Onboarding"
           ? {
-              onboardingSched: nextSchedule,
+              onboardingSched: payloadSchedule,
               onboardingFacilitatorId: interviewerId,
             }
-          : { interviewSched: nextSchedule, interviewerId };
+          : { interviewSched: payloadSchedule, interviewerId };
 
     try {
       await updateCandidateStatus({
@@ -673,6 +678,7 @@ function CandidateProfileContent() {
         formatScheduleForDisplay={formatScheduleForDisplay}
         toDateTimeLocalValue={toDateTimeLocalValue}
         hasPendingChanges={hasPendingChanges}
+        requiresSchedule={shouldOpenScheduleModal}
         savingApplicantId={savingApplicantId}
         onStatusChange={handleStatusChange}
         onScheduleChange={handleScheduleChange}

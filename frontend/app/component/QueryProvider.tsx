@@ -2,17 +2,28 @@
 
 import { useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import { InboxApiError } from "@/lib/api/inbox";
+
+/** Auth and permission errors won't fix themselves on retry, whichever client threw them. */
+const isUnretryableStatus = (error: unknown) => {
+  const status =
+    error instanceof InboxApiError
+      ? error.status
+      : isAxiosError(error)
+        ? (error.response?.status ?? null)
+        : null;
+
+  return status === 401 || status === 403 || status === 404;
+};
 
 const makeQueryClient = () =>
   new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 30_000,
-        // Auth and permission errors won't fix themselves on retry.
         retry: (failureCount, error) =>
-          !(error instanceof InboxApiError && (error.status === 401 || error.status === 403 || error.status === 404)) &&
-          failureCount < 2,
+          !isUnretryableStatus(error) && failureCount < 2,
       },
     },
   });

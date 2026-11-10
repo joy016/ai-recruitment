@@ -21,13 +21,9 @@ import ConfirmationModal from "@/app/component/ConfirmationModal";
 import PermissionMatrix from "./(components)/PermissionMatrix";
 import CreateRoleDialog from "./(components)/CreateRoleDialog";
 import { Role } from "../(types)/account.types";
+import { getAllRoles } from "@/lib/api/roles";
+import axios from "axios";
 import {
-  IS_CREATE_ROLE_API_MOCKED,
-  getRolesWithPreview,
-} from "@/lib/api/roles";
-import { isPreviewRole } from "@/lib/api/roles.mock";
-import {
-  IS_PERMISSIONS_API_MOCKED,
   getPermissionCatalog,
   getRolePermissions,
   updateRolePermissions,
@@ -37,6 +33,7 @@ import { usePermissions } from "@/lib/hooks/usePermissions";
 import { PERMISSIONS } from "@/constant/permissions";
 import { useAppSelector } from "@/lib/store/hooks";
 import { buildPermissionMatrix } from "@/lib/utils/permissions";
+import { getRoleChipStyle } from "@/lib/utils/roleColor";
 
 type Toast = { severity: "success" | "warning"; message: string };
 
@@ -51,7 +48,9 @@ const primaryButtonSx = {
   },
 } as const;
 
-const toIdSet = (ids: number[]) => new Set(ids);
+// Assignments are tracked by permission name, not permissionId: the backend
+// stores one row per (role, permission), so ids differ between roles.
+const toNameSet = (names: string[]) => new Set(names);
 
 export default function RolePermissionsPage() {
   const { hasPermission, refreshPermissions } = usePermissions();
@@ -67,8 +66,8 @@ export default function RolePermissionsPage() {
   const [setupAttempt, setSetupAttempt] = useState(0);
 
   const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
-  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-  const [draftIds, setDraftIds] = useState<Set<number>>(new Set());
+  const [savedNames, setSavedNames] = useState<Set<string>>(new Set());
+  const [draftNames, setDraftNames] = useState<Set<string>>(new Set());
   const [isLoadingRole, setIsLoadingRole] = useState(false);
   const [roleError, setRoleError] = useState("");
   const [roleAttempt, setRoleAttempt] = useState(0);
@@ -78,14 +77,14 @@ export default function RolePermissionsPage() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [createRoleOpen, setCreateRoleOpen] = useState(false);
 
-  // Roles come from the real API; the permission catalog is mocked for now.
+  // Roles and the permission catalog both come from the real API.
   useEffect(() => {
     const loadSetup = async () => {
       setIsLoadingSetup(true);
       setSetupError("");
       try {
         const [rolesData, catalogData] = await Promise.all([
-          getRolesWithPreview(),
+          getAllRoles(),
           getPermissionCatalog(),
         ]);
         setRoles(rolesData ?? []);
@@ -114,14 +113,11 @@ export default function RolePermissionsPage() {
       setIsLoadingRole(true);
       setRoleError("");
       try {
-        const permissions = await getRolePermissions(
-          selectedRole.roleId,
-          selectedRole.roleName,
-        );
+        const permissions = await getRolePermissions(selectedRole.roleId);
         if (cancelled) return;
-        const ids = permissions.map((permission) => permission.permissionId);
-        setSavedIds(toIdSet(ids));
-        setDraftIds(toIdSet(ids));
+        const names = permissions.map((permission) => permission.permissionName);
+        setSavedNames(toNameSet(names));
+        setDraftNames(toNameSet(names));
       } catch (error) {
         console.error("Failed to load role permissions:", error);
         if (!cancelled) {
@@ -142,31 +138,33 @@ export default function RolePermissionsPage() {
 
   const matrix = useMemo(() => buildPermissionMatrix(catalog), [catalog]);
 
-  const changedIds = useMemo(() => {
-    const changed = new Set<number>();
-    draftIds.forEach((id) => !savedIds.has(id) && changed.add(id));
-    savedIds.forEach((id) => !draftIds.has(id) && changed.add(id));
+  const changedNames = useMemo(() => {
+    const changed = new Set<string>();
+    draftNames.forEach((name) => !savedNames.has(name) && changed.add(name));
+    savedNames.forEach((name) => !draftNames.has(name) && changed.add(name));
     return changed;
-  }, [draftIds, savedIds]);
+  }, [draftNames, savedNames]);
 
-  const hasChanges = changedIds.size > 0;
+  const hasChanges = changedNames.size > 0;
   const isBusy = isLoadingRole || !!roleError;
 
-  const handleToggle = (permissionId: number) => {
+  const handleToggle = (permissionName: string) => {
     if (!canManage) return;
-    setDraftIds((current) => {
+    setDraftNames((current) => {
       const next = new Set(current);
-      if (next.has(permissionId)) next.delete(permissionId);
-      else next.add(permissionId);
+      if (next.has(permissionName)) next.delete(permissionName);
+      else next.add(permissionName);
       return next;
     });
   };
 
-  const handleToggleModule = (permissionIds: number[], grant: boolean) => {
+  const handleToggleModule = (permissionNames: string[], grant: boolean) => {
     if (!canManage) return;
-    setDraftIds((current) => {
+    setDraftNames((current) => {
       const next = new Set(current);
-      permissionIds.forEach((id) => (grant ? next.add(id) : next.delete(id)));
+      permissionNames.forEach((name) =>
+        grant ? next.add(name) : next.delete(name),
+      );
       return next;
     });
   };
@@ -180,13 +178,13 @@ export default function RolePermissionsPage() {
     setSelectedRoleId(roleId);
   };
 
-  const handleCancel = () => setDraftIds(new Set(savedIds));
+  const handleCancel = () => setDraftNames(new Set(savedNames));
 
   const handleRoleCreated = async (role: Role) => {
     setCreateRoleOpen(false);
 
     try {
-      setRoles(await getRolesWithPreview());
+      setRoles(await getAllRoles());
     } catch (error) {
       console.error("Failed to refresh roles:", error);
       setRoles((current) => [...current, role]);
@@ -196,21 +194,19 @@ export default function RolePermissionsPage() {
     setSelectedRoleId(role.roleId);
     setToast({
       severity: "success",
-      message: IS_CREATE_ROLE_API_MOCKED
-        ? `Role "${role.roleName}" created (preview only, not saved to the server).`
-        : `Role "${role.roleName}" created. You can now assign its permissions.`,
+      message: `Role "${role.roleName}" created. You can now assign its permissions.`,
     });
   };
 
   const handleConfirmSave = async () => {
     if (!selectedRole || !canManage) return;
 
-    const result = await updateRolePermissions(selectedRole.roleId, [
-      ...draftIds,
-    ]);
-
-    if (result.persisted) {
-      setSavedIds(new Set(draftIds));
+    try {
+      const result = await updateRolePermissions(selectedRole.roleId, [
+        ...draftNames,
+      ]);
+      setSavedNames(new Set(result.permissions));
+      setDraftNames(new Set(result.permissions));
       // Editing your own role changes what you can do: reload immediately.
       if (selectedRole.roleId === currentRoleId) {
         refreshPermissions();
@@ -219,15 +215,14 @@ export default function RolePermissionsPage() {
         severity: "success",
         message: `Permissions for ${selectedRole.roleName} saved.`,
       });
-      return;
+    } catch (error) {
+      console.error("Failed to save role permissions:", error);
+      const message =
+        (axios.isAxiosError<{ message?: string }>(error) &&
+          error.response?.data?.message) ||
+        "Unable to save permission changes. Please try again.";
+      setToast({ severity: "warning", message });
     }
-
-    // Mocked API: nothing was saved, so keep the edits marked as unsaved.
-    setToast({
-      severity: "warning",
-      message:
-        "Preview mode: the permissions API isn't connected yet, so these changes were not saved.",
-    });
   };
 
   const renderBody = () => {
@@ -310,15 +305,15 @@ export default function RolePermissionsPage() {
             <CircularProgress size={28} />
           </Box>
         )}
-        {!isLoadingRole && draftIds.size === 0 && !hasChanges && (
+        {!isLoadingRole && draftNames.size === 0 && !hasChanges && (
           <Alert severity="info" sx={{ mb: 1.5 }}>
             {selectedRole?.roleName} has no permissions assigned yet.
           </Alert>
         )}
         <PermissionMatrix
           matrix={matrix}
-          assignedIds={draftIds}
-          changedIds={changedIds}
+          assignedNames={draftNames}
+          changedNames={changedNames}
           disabled={isLoadingRole || !canManage}
           onToggle={handleToggle}
           onToggleModule={handleToggleModule}
@@ -383,13 +378,6 @@ export default function RolePermissionsPage() {
         )}
       </Box>
 
-      {IS_PERMISSIONS_API_MOCKED && (
-        <Alert severity="warning" sx={{ mt: 2 }}>
-          Preview mode: permissions are sample data and changes are not saved
-          until the permissions API is connected.
-        </Alert>
-      )}
-
       <Box
         sx={{
           mt: 2.5,
@@ -420,35 +408,25 @@ export default function RolePermissionsPage() {
           >
             {roles.map((role) => (
               <MenuItem key={role.roleId} value={role.roleId}>
-                {role.roleName}
-                {isPreviewRole(role.roleId) && (
-                  <Chip
-                    label="Preview"
-                    size="small"
-                    sx={{
-                      ml: 1,
-                      height: 20,
-                      fontSize: "0.7rem",
-                      fontWeight: 700,
-                      color: "#9a5b00",
-                      bgcolor: "#fff6e5",
-                    }}
-                  />
-                )}
+                <Chip
+                  label={role.roleName}
+                  size="small"
+                  sx={{ fontWeight: 700, ...getRoleChipStyle(role) }}
+                />
               </MenuItem>
             ))}
           </Select>
 
           {selectedRole && !isLoadingSetup && (
             <Chip
-              label={`${draftIds.size} of ${catalog.length} permissions assigned`}
+              label={`${draftNames.size} of ${catalog.length} permissions assigned`}
               size="small"
               sx={{ fontWeight: 700, color: "#1f80b6", bgcolor: "#e8f4fb" }}
             />
           )}
           {hasChanges && (
             <Chip
-              label={`${changedIds.size} unsaved ${changedIds.size === 1 ? "change" : "changes"}`}
+              label={`${changedNames.size} unsaved ${changedNames.size === 1 ? "change" : "changes"}`}
               size="small"
               sx={{ fontWeight: 700, color: "#9a5b00", bgcolor: "#fff6e5" }}
             />
@@ -499,7 +477,7 @@ export default function RolePermissionsPage() {
       <ConfirmationModal
         open={confirmSaveOpen}
         title="Save permission changes?"
-        description={`This will update ${changedIds.size} ${changedIds.size === 1 ? "permission" : "permissions"} for ${selectedRole?.roleName ?? "this role"}. Users with this role will be affected.`}
+        description={`This will update ${changedNames.size} ${changedNames.size === 1 ? "permission" : "permissions"} for ${selectedRole?.roleName ?? "this role"}. Users with this role will be affected.`}
         confirmLabel="Save Changes"
         onConfirm={handleConfirmSave}
         onClose={() => setConfirmSaveOpen(false)}
@@ -512,7 +490,7 @@ export default function RolePermissionsPage() {
         confirmLabel="Discard & Switch"
         confirmTone="danger"
         onConfirm={() => {
-          setDraftIds(new Set(savedIds));
+          setDraftNames(new Set(savedNames));
           setSelectedRoleId(pendingRoleId);
         }}
         onClose={() => setPendingRoleId(null)}

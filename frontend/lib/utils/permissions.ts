@@ -9,7 +9,10 @@ const ACTION_ORDER = [
   "delete",
   "schedule",
   "reschedule",
+  "send",
   "manage",
+  "managetemplates",
+  "managesystemsettings",
 ];
 
 /** Known modules are shown in this order; any others follow alphabetically. */
@@ -19,6 +22,7 @@ const MODULE_ORDER = [
   "jobs",
   "jobposts",
   "interviews",
+  "inbox",
   "users",
   "accounts",
   "notifications",
@@ -32,6 +36,7 @@ const MODULE_LABELS: Record<string, string> = {
 
 const ACTION_LABELS: Record<string, string> = {
   managesystemsettings: "Manage System Settings",
+  managetemplates: "Manage Templates",
 };
 
 const toTitleCase = (value: string) =>

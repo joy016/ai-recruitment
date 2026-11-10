@@ -17,21 +17,23 @@ import {
   getActionLabel,
 } from "@/lib/utils/permissions";
 
+// Keyed by permission name: the backend gives each role its own permissionId
+// for the same permission, so ids can't be compared across roles.
 type PermissionMatrixProps = {
   matrix: PermissionMatrixData;
-  assignedIds: Set<number>;
-  changedIds: Set<number>;
+  assignedNames: Set<string>;
+  changedNames: Set<string>;
   disabled?: boolean;
-  onToggle: (permissionId: number) => void;
-  onToggleModule: (permissionIds: number[], grant: boolean) => void;
+  onToggle: (permissionName: string) => void;
+  onToggleModule: (permissionNames: string[], grant: boolean) => void;
 };
 
 const CHANGED_BG = "#fff6e5";
 
 export default function PermissionMatrix({
   matrix,
-  assignedIds,
-  changedIds,
+  assignedNames,
+  changedNames,
   disabled = false,
   onToggle,
   onToggleModule,
@@ -65,12 +67,12 @@ export default function PermissionMatrix({
         </TableHead>
         <TableBody>
           {matrix.rows.map((row) => {
-            const rowIds = Object.values(row.cells)
+            const rowNames = Object.values(row.cells)
               .filter((cell) => cell !== undefined)
-              .map((cell) => cell.permissionId);
-            const grantedCount = rowIds.filter((id) => assignedIds.has(id)).length;
-            const allGranted = rowIds.length > 0 && grantedCount === rowIds.length;
-            const rowChanged = rowIds.some((id) => changedIds.has(id));
+              .map((cell) => cell.permissionName);
+            const grantedCount = rowNames.filter((name) => assignedNames.has(name)).length;
+            const allGranted = rowNames.length > 0 && grantedCount === rowNames.length;
+            const rowChanged = rowNames.some((name) => changedNames.has(name));
 
             return (
               <TableRow
@@ -90,7 +92,7 @@ export default function PermissionMatrix({
                       {row.label}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "#7d9ab0" }}>
-                      {grantedCount}/{rowIds.length}
+                      {grantedCount}/{rowNames.length}
                     </Typography>
                     {rowChanged && (
                       <Chip
@@ -123,7 +125,7 @@ export default function PermissionMatrix({
                     );
                   }
 
-                  const changed = changedIds.has(permission.permissionId);
+                  const changed = changedNames.has(permission.permissionName);
                   return (
                     <TableCell
                       key={action}
@@ -131,8 +133,8 @@ export default function PermissionMatrix({
                       sx={{ bgcolor: changed ? CHANGED_BG : undefined }}
                     >
                       <Checkbox
-                        checked={assignedIds.has(permission.permissionId)}
-                        onChange={() => onToggle(permission.permissionId)}
+                        checked={assignedNames.has(permission.permissionName)}
+                        onChange={() => onToggle(permission.permissionName)}
                         disabled={disabled}
                         slotProps={{
                           input: {
@@ -154,8 +156,8 @@ export default function PermissionMatrix({
                   <Checkbox
                     checked={allGranted}
                     indeterminate={grantedCount > 0 && !allGranted}
-                    onChange={() => onToggleModule(rowIds, !allGranted)}
-                    disabled={disabled || rowIds.length === 0}
+                    onChange={() => onToggleModule(rowNames, !allGranted)}
+                    disabled={disabled || rowNames.length === 0}
                     slotProps={{
                       input: { "aria-label": `All ${row.label} permissions` },
                     }}

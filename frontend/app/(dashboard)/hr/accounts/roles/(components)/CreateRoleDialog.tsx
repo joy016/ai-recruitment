@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import {
   Alert,
   Button,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -18,6 +20,11 @@ import {
 import { Close } from "@mui/icons-material";
 import { Role } from "../../(types)/account.types";
 import { createRole } from "@/lib/api/roles";
+import RoleColorPicker from "./RoleColorPicker";
+import {
+  DEFAULT_ROLE_CHIP_COLOR,
+  getReadableTextColor,
+} from "@/lib/utils/roleColor";
 
 const ROLE_NAME_MAX_LENGTH = 50;
 const DESCRIPTION_MAX_LENGTH = 250;
@@ -37,6 +44,7 @@ export default function CreateRoleDialog({
 }: Readonly<CreateRoleDialogProps>) {
   const [roleName, setRoleName] = useState("");
   const [description, setDescription] = useState("");
+  const [chipColor, setChipColor] = useState(DEFAULT_ROLE_CHIP_COLOR);
   const [nameTouched, setNameTouched] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -57,6 +65,7 @@ export default function CreateRoleDialog({
   const resetForm = () => {
     setRoleName("");
     setDescription("");
+    setChipColor(DEFAULT_ROLE_CHIP_COLOR);
     setNameTouched(false);
     setSubmitError("");
   };
@@ -75,19 +84,20 @@ export default function CreateRoleDialog({
     setSubmitError("");
     setIsCreating(true);
     try {
-      const role = await createRole(
-        { roleName: trimmedName, description: description.trim() || undefined },
-        existingRoles,
-      );
+      const role = await createRole({
+        roleName: trimmedName,
+        description: description.trim() || undefined,
+        chipColor,
+      });
       resetForm();
       onCreated(role);
     } catch (error) {
       console.error("Failed to create role:", error);
-      setSubmitError(
-        error instanceof Error && error.message
-          ? error.message
-          : "Unable to create the role. Please try again.",
-      );
+      const message =
+        (isAxiosError<{ message?: string }>(error) &&
+          error.response?.data?.message) ||
+        "Unable to create the role. Please try again.";
+      setSubmitError(message);
     } finally {
       setIsCreating(false);
     }
@@ -154,6 +164,24 @@ export default function CreateRoleDialog({
               fullWidth
               slotProps={{ htmlInput: { maxLength: DESCRIPTION_MAX_LENGTH } }}
             />
+            <RoleColorPicker
+              value={chipColor}
+              onChange={setChipColor}
+              disabled={isCreating}
+            />
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+              <Typography variant="body2" sx={{ color: "#5f7f96" }}>
+                Preview:
+              </Typography>
+              <Chip
+                label={trimmedName || "Role name"}
+                sx={{
+                  fontWeight: 700,
+                  bgcolor: chipColor,
+                  color: getReadableTextColor(chipColor),
+                }}
+              />
+            </Stack>
           </Stack>
         </DialogContent>
         <Divider />

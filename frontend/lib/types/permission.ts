@@ -21,11 +21,9 @@ export interface MyPermissionsResponse {
   permissions: string[];
 }
 
-export interface UpdateRolePermissionsPayload {
-  permissionIds: number[];
-}
-
-export interface UpdateRolePermissionsResult {
-  /** False while the permissions API is mocked: nothing reached the server. */
-  persisted: boolean;
+/** PUT /api/Roles/{roleId}/permissions: the role's permission set after saving. */
+export interface RolePermissionsResponse {
+  roleId: number;
+  roleName: string;
+  permissions: string[];
 }

@@ -3,34 +3,29 @@ import { api } from "../api-client";
 import { Role } from "@/app/(dashboard)/hr/accounts/(types)/account.types";
 import { Interviewer } from "../types/user";
 import { CreateRolePayload } from "../types/role";
-import { getPreviewRoles, mockCreateRole } from "./roles.mock";
+import { normalizeHexColor } from "../utils/roleColor";
 
 const ROLES_ENDPOINT = `${BackendServer}/api/Roles`;
-
-/**
- * There is no create-role endpoint yet, so createRole is mocked (see
- * roles.mock.ts). To connect the real API, replace the mock call with e.g.
- * `api.post<Role, CreateRolePayload>(`${ROLES_ENDPOINT}/insertRole`, payload)`,
- * drop the preview roles from getRolesWithPreview, and set this to false.
- */
-export const IS_CREATE_ROLE_API_MOCKED = true;
 
 export const getAllRoles = async (): Promise<Role[]> => {
   return api.get<Role[]>(`${ROLES_ENDPOINT}/getAllRoles`);
 };
 
-/** Real roles plus any roles created in preview mode this session. */
-export const getRolesWithPreview = async (): Promise<Role[]> => {
-  const roles = (await getAllRoles()) ?? [];
-  return IS_CREATE_ROLE_API_MOCKED ? [...roles, ...getPreviewRoles()] : roles;
+export const getRole = async (roleId: number): Promise<Role> => {
+  return api.get<Role>(`${ROLES_ENDPOINT}/getRole/${roleId}`);
 };
 
-/** Creates a role with no permissions; permissions are assigned separately. */
-export const createRole = async (
-  payload: CreateRolePayload,
-  existingRoles: Role[],
-): Promise<Role> => {
-  return mockCreateRole(payload, existingRoles);
+/**
+ * Creates a role with no permissions; permissions are assigned separately.
+ * Returns the freshly created role in the same shape as getAllRoles/getRole
+ * (the insertRole response itself isn't DTO-shaped).
+ */
+export const createRole = async (payload: CreateRolePayload): Promise<Role> => {
+  const created = await api.post<{ roleId: number }, CreateRolePayload>(
+    `${ROLES_ENDPOINT}/insertRole`,
+    { ...payload, chipColor: normalizeHexColor(payload.chipColor) },
+  );
+  return getRole(created.roleId);
 };
 
 export const getInterviwer = async (): Promise<Interviewer[]> => {

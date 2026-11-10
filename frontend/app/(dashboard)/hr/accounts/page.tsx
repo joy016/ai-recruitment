@@ -39,6 +39,7 @@ import { getDepartment } from "@/lib/api/department";
 import { Department } from "@/lib/types/department";
 import { usePermissions } from "@/lib/hooks/usePermissions";
 import { PERMISSIONS } from "@/constant/permissions";
+import { getRoleChipStyle } from "@/lib/utils/roleColor";
 
 type AccountStatusFilter = (typeof ACCOUNT_STATUS_FILTERS)[number];
 
@@ -328,10 +329,7 @@ export default function AccountsPage() {
       label: "Role",
       render: (row) => {
         const roleColor = roles.find((role) => role.roleId === row.roleId);
-        const style = {
-          color: roleColor?.chipColor,
-          backgroundColor: roleColor?.backgroundColor,
-        };
+        const style = getRoleChipStyle(roleColor ?? {});
         return (
           <Chip
             size="small"

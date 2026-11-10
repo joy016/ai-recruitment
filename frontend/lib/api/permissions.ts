@@ -3,67 +3,63 @@ import { api } from "../api-client";
 import {
   Permission,
   PermissionDefinition,
-  UpdateRolePermissionsResult,
+  RolePermissionsResponse,
 } from "../types/permission";
-import {
-  mockGetPermissionCatalog,
-  mockGetRolePermissions,
-} from "./permissions.mock";
 
 const PERMISSIONS_ENDPOINT = `${BackendServer}/api/Permissions`;
+const ROLES_ENDPOINT = `${BackendServer}/api/Roles`;
 
 /**
- * Real API: permissions assigned to a role (a plain array, one row per
- * permission). This is the source of truth for the logged-in user's access.
+ * Real API: permission rows (a plain array, one row per role + permission).
+ * With `roleId`, only that role's permissions; without it, every role's.
+ * This is also the source of truth for the logged-in user's access.
  */
 export const getAllPermissions = async (
-  roleId: number,
+  roleId?: number,
 ): Promise<Permission[]> => {
   return api.get<Permission[]>(`${PERMISSIONS_ENDPOINT}/getAllPermissions`, {
-    params: { roleId },
+    params: roleId === undefined ? undefined : { roleId },
   });
 };
 
 // ---------------------------------------------------------------------------
-// Role & Permissions management screen (still mocked; not used for access checks)
+// Role & Permissions management screen
 // ---------------------------------------------------------------------------
 
 /**
- * The permissions endpoints are not available yet, so these functions are
- * backed by mock data (see permissions.mock.ts). To connect the real API,
- * replace each mock call with an `api` call, following lib/api/user.ts, e.g.
- *
- *   const PERMISSIONS_ENDPOINT = `${BackendServer}/api/Permissions`;
- *   return api.get<Permission[]>(`${PERMISSIONS_ENDPOINT}/getRolePermissions/${roleId}`);
- *
- * then set IS_PERMISSIONS_API_MOCKED to false.
+ * Every permission that exists in the system; drives the matrix rows and
+ * columns. The backend stores one row per (role, permission), so the same
+ * permission name appears once per role with a different permissionId; rows
+ * are de-duplicated by name. Assignments are always matched by name.
  */
-export const IS_PERMISSIONS_API_MOCKED = true;
-
-/** Every permission that exists in the system; drives the matrix columns and rows. */
 export const getPermissionCatalog = async (): Promise<PermissionDefinition[]> => {
-  return mockGetPermissionCatalog();
+  const permissions = await getAllPermissions();
+  const byName = new Map<string, PermissionDefinition>();
+  permissions.forEach(({ permissionId, permissionName, description }) => {
+    if (!byName.has(permissionName)) {
+      byName.set(permissionName, { permissionId, permissionName, description });
+    }
+  });
+  return [...byName.values()];
 };
 
 /** Permissions currently assigned to a role. */
-export const getRolePermissions = async (
-  roleId: number,
-  roleName: string,
-): Promise<Permission[]> => {
-  return mockGetRolePermissions(roleId, roleName);
+export const getRolePermissions = async (roleId: number): Promise<Permission[]> => {
+  return getAllPermissions(roleId);
 };
 
 /**
- * Replaces the permissions assigned to a role.
- *
- * While mocked, no request is sent and nothing is persisted; callers must
- * check `persisted` instead of treating the call as a successful save.
+ * Replaces the permissions assigned to a role, by permission name. The list is
+ * the complete desired set, not a delta - names left out are removed. Throws
+ * on failure (invalid names, role not found, or the last-administrative-access
+ * guard); callers should surface `error.response.data.message`.
  */
 export const updateRolePermissions = async (
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _roleId: number,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _permissionIds: number[],
-): Promise<UpdateRolePermissionsResult> => {
-  return { persisted: false };
+  roleId: number,
+  permissionNames: string[],
+): Promise<RolePermissionsResponse> => {
+  return api.put<RolePermissionsResponse>(
+    `${ROLES_ENDPOINT}/${roleId}/permissions`,
+    { permissions: permissionNames },
+  );
 };

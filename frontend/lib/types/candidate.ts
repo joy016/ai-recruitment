@@ -29,11 +29,12 @@ export interface ResumeUrlResponse {
 export interface UpdateStatusPayload {
   id: string;
   applicantStatusId: number;
-  interviewSched?: string;
+  /** null when the target status has no schedule. */
+  interviewSched?: string | null;
   interviewerId?: string;
-  jobOfferSched?: string;
+  jobOfferSched?: string | null;
   jobOfferFacilitatorId?: string;
-  onboardingSched?: string;
+  onboardingSched?: string | null;
   onboardingFacilitatorId?: string;
   updatedAt: string;
 }

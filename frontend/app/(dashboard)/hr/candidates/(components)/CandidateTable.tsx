@@ -95,6 +95,8 @@ type CandidateTableProps = {
   formatScheduleForDisplay: (value: string) => string;
   toDateTimeLocalValue: (value: string | undefined) => string;
   hasPendingChanges: (applicantId: string) => boolean;
+  /** Interview steps, Job Offer and Onboarding; others disable the picker. */
+  requiresSchedule: (statusId: number) => boolean;
   savingApplicantId: string | null;
   onStatusChange: (
     applicantId: string,
@@ -126,6 +128,7 @@ export default function CandidateTable({
   formatScheduleForDisplay,
   toDateTimeLocalValue,
   hasPendingChanges,
+  requiresSchedule,
   savingApplicantId,
   onStatusChange,
   onScheduleChange,
@@ -183,24 +186,39 @@ export default function CandidateTable({
     );
   };
 
-  const renderScheduleInput = (candidate: Candidate, fullWidth = false) => (
-    <TextField
-      type="datetime-local"
-      size="small"
-      fullWidth={fullWidth}
-      value={toDateTimeLocalValue(draftScheduleByApplicantId[candidate.id])}
-      onChange={(event) => onScheduleChange(candidate.id, event.target.value)}
-      disabled={savingApplicantId === candidate.id}
-      slotProps={{
-        htmlInput: {
-          // Past dates are disabled in the picker; page.tsx also rejects past times on save.
-          min: toDateTimeLocalValue(new Date().toISOString()),
-          "aria-label": `Interview schedule for ${candidate.firstName} ${candidate.lastName}`,
-        },
-      }}
-      sx={{ minWidth: fullWidth ? 0 : 210 }}
-    />
-  );
+  const renderScheduleInput = (candidate: Candidate, fullWidth = false) => {
+    // Statuses without a schedule (Screening, Rejected, ...) lock the picker;
+    // the save payload sends null for them.
+    const scheduleNotNeeded = !requiresSchedule(
+      draftStatusByApplicantId[candidate.id],
+    );
+
+    return (
+      <TextField
+        type="datetime-local"
+        size="small"
+        fullWidth={fullWidth}
+        value={
+          scheduleNotNeeded
+            ? ""
+            : toDateTimeLocalValue(draftScheduleByApplicantId[candidate.id])
+        }
+        onChange={(event) => onScheduleChange(candidate.id, event.target.value)}
+        disabled={savingApplicantId === candidate.id || scheduleNotNeeded}
+        title={
+          scheduleNotNeeded ? "No schedule needed for this status" : undefined
+        }
+        slotProps={{
+          htmlInput: {
+            // Past dates are disabled in the picker; page.tsx also rejects past times on save.
+            min: toDateTimeLocalValue(new Date().toISOString()),
+            "aria-label": `Interview schedule for ${candidate.firstName} ${candidate.lastName}`,
+          },
+        }}
+        sx={{ minWidth: fullWidth ? 0 : 210 }}
+      />
+    );
+  };
 
   const pagination = (
     <TablePagination

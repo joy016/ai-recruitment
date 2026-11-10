@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { isAxiosError } from "axios";
 import {
+  Alert,
   Box,
   ButtonBase,
   Chip,
@@ -124,10 +126,14 @@ export default function HrDashboardPage() {
 
   const {
     data: analytics,
+    error: analyticsError,
     isLoading: isAnalyticsLoading,
     isError: isAnalyticsError,
     refetch: refetchAnalytics,
   } = useDashboardAnalytics();
+
+  const isAnalyticsForbidden =
+    isAxiosError(analyticsError) && analyticsError.response?.status === 403;
 
   // Fixed order from the backend (always LinkedIn, Referral, Company Website, JobStreet,
   // Other) mapped 1:1 onto CATEGORICAL_COLORS by index, so a source keeps its color even at
@@ -326,6 +332,13 @@ export default function HrDashboardPage() {
           </Typography>
         </Box>
 
+        {isAnalyticsForbidden ? (
+          <Box sx={{ p: { xs: 1.5, sm: 2.5 } }}>
+            <Alert severity="warning">
+              You don&apos;t have access to recruitment analytics.
+            </Alert>
+          </Box>
+        ) : (
         <Grid container spacing={2.2} sx={{ p: { xs: 1.5, sm: 2.5 } }}>
           <Grid size={{ xs: 12, md: 5 }}>
             <AnalyticsChartFrame
@@ -453,6 +466,7 @@ export default function HrDashboardPage() {
             </AnalyticsChartFrame>
           </Grid>
         </Grid>
+        )}
       </CardContainer>
     </Box>
   );
