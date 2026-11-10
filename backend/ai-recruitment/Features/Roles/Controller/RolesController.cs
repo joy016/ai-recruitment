@@ -36,10 +36,26 @@ namespace ai_recruitment.Features.Roles.Controller
                 });
             }
 
+            var chipColor = RoleColorDefaults.DefaultChipColor;
+            if (!string.IsNullOrWhiteSpace(dto.ChipColor))
+            {
+                var trimmed = dto.ChipColor.Trim();
+                if (!RoleColorDefaults.IsValidHex(trimmed))
+                {
+                    return BadRequest(new
+                    {
+                        message = $"chipColor must match {RoleColorDefaults.HexColorPattern} (e.g. \"{RoleColorDefaults.DefaultChipColor}\")."
+                    });
+                }
+                chipColor = RoleColorDefaults.Normalize(trimmed);
+            }
+
             var role = new Model.Role
             {
                 RoleName = dto.RoleName,
                 Description = dto.Description,
+                ChipColor = chipColor,
+                BackgroundColor = RoleColorDefaults.DeriveBackgroundColor(chipColor),
             };
 
             _context.Roles.Add(role);
@@ -89,7 +105,8 @@ namespace ai_recruitment.Features.Roles.Controller
                     CreatedAt = r.CreatedAt,
                     UserCount = r.Users.Count(),
                     PermissionCount = r.Permissions.Count(),
-                    
+                    ChipColor = r.ChipColor,
+                    BackgroundColor = r.BackgroundColor,
                 })
                 .FirstOrDefaultAsync();
 
@@ -119,6 +136,20 @@ namespace ai_recruitment.Features.Roles.Controller
 
             role.RoleName = dto.RoleName;
             role.Description = dto.Description;
+
+            if (!string.IsNullOrWhiteSpace(dto.ChipColor))
+            {
+                var trimmed = dto.ChipColor.Trim();
+                if (!RoleColorDefaults.IsValidHex(trimmed))
+                {
+                    return BadRequest(new
+                    {
+                        message = $"chipColor must match {RoleColorDefaults.HexColorPattern} (e.g. \"{RoleColorDefaults.DefaultChipColor}\")."
+                    });
+                }
+                role.ChipColor = RoleColorDefaults.Normalize(trimmed);
+                role.BackgroundColor = RoleColorDefaults.DeriveBackgroundColor(role.ChipColor);
+            }
 
             await _context.SaveChangesAsync();
 
