@@ -8,6 +8,7 @@ using ai_recruitment.Features.Inbox.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Services;
 using ai_recruitment.Features.Roles;
+using ai_recruitment.Features.Security;
 using ai_recruitment.Features.Users;
 using ai_recruitment.Features.Users.Services;
 using ai_recruitment.Service;
@@ -19,6 +20,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Npgsql;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -83,6 +86,31 @@ builder.Services.AddAuthentication(options =>
 
             return Task.CompletedTask;
         },
+
+        // Settings > Security "Active Sessions": rejects a token whose session has since been
+        // revoked (Log Out of All Sessions, a single session revoked, or the other-sessions
+        // sweep after changing the password) even though the token itself hasn't expired yet.
+        // A token with no session row at all (issued before this feature shipped) is allowed
+        // through - see SecurityService.IsSessionActiveAsync.
+        OnTokenValidated = async context =>
+        {
+            var tokenId = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Jti);
+            if (string.IsNullOrEmpty(tokenId))
+            {
+                context.Fail("Token is missing its jti claim.");
+                return;
+            }
+
+            var securityService = context.HttpContext.RequestServices.GetRequiredService<ISecurityService>();
+
+            if (!await securityService.IsSessionActiveAsync(tokenId))
+            {
+                context.Fail("This session has been signed out.");
+                return;
+            }
+
+            await securityService.TouchLastActiveAsync(tokenId);
+        },
     };
 });
 
@@ -98,6 +126,10 @@ builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
 builder.Services.AddScoped<IAuthorizationHandler, PermissionHandler>();
 builder.Services.AddScoped<IRolePermissionService, RolePermissionService>();
+
+// Settings > Security: password change + Active Sessions (Features/Security). Reuses the
+// same IMemoryCache as the permission check above for its brief session-validity cache.
+builder.Services.AddScoped<ISecurityService, SecurityService>();
 
 // Invitation-based account activation. Email delivery itself lives in n8n; this app
 // only publishes the invitation event to the configured webhook.
@@ -324,6 +356,19 @@ builder.Services.AddRateLimiter(options =>
         {
             Window = TimeSpan.FromMinutes(1),
             PermitLimit = 20,
+            QueueLimit = 0,
+        });
+    });
+
+    // POST /api/Security/changePassword: per authenticated caller, so a wrong current-password
+    // guess can't be brute-forced.
+    options.AddPolicy(RateLimiterPolicies.ChangePassword, httpContext =>
+    {
+        var callerId = httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        return RateLimitPartition.GetFixedWindowLimiter(callerId, _ => new FixedWindowRateLimiterOptions
+        {
+            Window = TimeSpan.FromMinutes(15),
+            PermitLimit = 5,
             QueueLimit = 0,
         });
     });

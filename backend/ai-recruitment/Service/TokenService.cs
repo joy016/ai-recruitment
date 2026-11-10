@@ -8,7 +8,7 @@ namespace ai_recruitment.Service
 
     public interface ITokenService
     {
-        string GenerateToken(string userId, string username, IEnumerable<string> roles, out DateTime expiresAt);
+        string GenerateToken(string userId, string username, IEnumerable<string> roles, out DateTime expiresAt, out string tokenId);
     }
     public class TokenService : ITokenService
     {
@@ -16,17 +16,19 @@ namespace ai_recruitment.Service
 
         public TokenService(IConfiguration config) => _config = config;
 
-        public string GenerateToken(string userId, string username, IEnumerable<string> roles, out DateTime expiresAt)
+        public string GenerateToken(string userId, string username, IEnumerable<string> roles, out DateTime expiresAt, out string tokenId)
         {
             var jwtSettings = _config.GetSection("Jwt");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings["Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
+            tokenId = Guid.NewGuid().ToString();
+
             var claims = new List<Claim>
         {
             new Claim(JwtRegisteredClaimNames.Sub, userId),
             new Claim(JwtRegisteredClaimNames.UniqueName, username),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            new Claim(JwtRegisteredClaimNames.Jti, tokenId)
         };
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 

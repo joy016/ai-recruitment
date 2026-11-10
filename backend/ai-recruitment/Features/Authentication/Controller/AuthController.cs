@@ -1,5 +1,6 @@
 using ai_recruitment.Data;
 using ai_recruitment.Features.Authentication.Dto;
+using ai_recruitment.Features.Security;
 using ai_recruitment.Features.Users.Dto;
 using ai_recruitment.Features.Users.Model;
 using ai_recruitment.Service;
@@ -15,12 +16,14 @@ namespace ai_recruitment.Features.Authentication.Controller
     {
         private readonly AppDbContext _context;
         private readonly ITokenService _tokenService;
+        private readonly ISecurityService _securityService;
         private readonly PasswordHasher<User> _passwordHasher = new();
 
-        public AuthController(AppDbContext context, ITokenService tokenService)
+        public AuthController(AppDbContext context, ITokenService tokenService, ISecurityService securityService)
         {
             _context = context;
             _tokenService = tokenService;
+            _securityService = securityService;
         }
 
         [HttpPost("login")]
@@ -52,14 +55,16 @@ namespace ai_recruitment.Features.Authentication.Controller
                 return Unauthorized(new { message = "Invalid email or password." });
             }
 
-            user.LastLoginAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
             var token = _tokenService.GenerateToken(
                 user.Id.ToString(),
                 user.Email,
                 new[] { user.Role.RoleName },
-                out var expiresAt);
+                out var expiresAt,
+                out var tokenId);
+
+            user.LastLoginAt = DateTime.UtcNow;
+            _securityService.TrackNewSession(user.Id, tokenId, expiresAt, HttpContext);
+            await _context.SaveChangesAsync();
 
             return Ok(new LoginResponseDto
             {

@@ -34,6 +34,10 @@ namespace ai_recruitment.Features.Users.Model
 
         public DateTime? LastLoginAt { get; set; }
 
+        // Set whenever POST /api/Security/changePassword succeeds. Null means the password
+        // has never been changed since the account was created/activated.
+        public DateTime? PasswordChangedAt { get; set; }
+
         // Hash of the active password-reset token, if a reset is in progress. Never the raw token.
         public string? ResetPasswordTokenHash { get; set; }
 

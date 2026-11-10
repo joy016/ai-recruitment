@@ -13,5 +13,9 @@ namespace ai_recruitment.Features.Users
         // POST /api/inbox/send: throttled per authenticated caller so a stuck Compose retry
         // loop (or a malicious script) can't spam n8n/Gmail.
         public const string InboxSend = "inbox-send";
+
+        // POST /api/Security/changePassword: throttled per authenticated caller so a wrong
+        // current-password guess can't be brute-forced.
+        public const string ChangePassword = "change-password";
     }
 }

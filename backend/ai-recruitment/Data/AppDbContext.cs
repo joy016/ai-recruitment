@@ -7,6 +7,7 @@ using ai_recruitment.Features.JobPosts.Model;
 using ai_recruitment.Features.Notifications.Model;
 using ai_recruitment.Features.Permissions.Model;
 using ai_recruitment.Features.Roles.Model;
+using ai_recruitment.Features.Security.Model;
 using ai_recruitment.Features.Users.Model;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,6 +41,7 @@ namespace ai_recruitment.Data
         public DbSet<EmailAttachment> EmailAttachments => Set<EmailAttachment>();
         public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
         public DbSet<EmailAuditLog> EmailAuditLogs => Set<EmailAuditLog>();
+        public DbSet<UserSession> UserSessions => Set<UserSession>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -271,6 +273,22 @@ namespace ai_recruitment.Data
 
             modelBuilder.Entity<EmailAuditLog>()
                 .HasIndex(l => l.MessageId);
+
+            // --- Settings > Security (Features/Security) ---
+
+            modelBuilder.Entity<UserSession>()
+                .HasOne(s => s.User)
+                .WithMany()
+                .HasForeignKey(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserSession>()
+                .HasIndex(s => s.TokenId)
+                .IsUnique();
+
+            // Backs both getActiveSessions and the OnTokenValidated revocation check.
+            modelBuilder.Entity<UserSession>()
+                .HasIndex(s => new { s.UserId, s.RevokedAt, s.ExpiresAt });
 
             // seed statuses
             modelBuilder.Entity<ApplicantStatus>().HasData(
