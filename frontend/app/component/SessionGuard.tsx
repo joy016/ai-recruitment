@@ -26,6 +26,10 @@ const ACTIVITY_EVENTS = [
 
 export const SESSION_EXPIRED_REASON = "session-expired";
 
+// Shown after Settings > Security's "Log Out of All Sessions", or after the current
+// session is revoked from the Active Sessions list - see SecuritySettings.tsx.
+export const LOGGED_OUT_EVERYWHERE_REASON = "logged-out-everywhere";
+
 type WarningType = "refresh" | "idle" | null;
 
 // The token lives in a cookie, which has no change event. Every logout path

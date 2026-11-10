@@ -93,8 +93,6 @@ export const MOCK_PERMISSION_GROUPS: PermissionGroupData[] = [
   },
 ];
 
-export const MOCK_LAST_LOGIN = "2026-09-23T17:42:00.000Z";
-
 const lastLoginDateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
   month: "long",

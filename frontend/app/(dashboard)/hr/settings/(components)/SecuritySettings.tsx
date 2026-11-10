@@ -1,53 +1,73 @@
 "use client";
 
-import { useState } from "react";
-import { Alert, Button, Chip, Divider, Snackbar, Stack } from "@mui/material";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
+import { Alert, Button, Divider, Snackbar, Stack } from "@mui/material";
 import SettingsSection from "./SettingsSection";
 import SettingRow from "./SettingRow";
 import ChangePasswordModal from "./ChangePasswordModal";
+import ActiveSessionsModal from "./ActiveSessionsModal";
 import ConfirmationModal from "@/app/component/ConfirmationModal";
 import { formatLastLogin } from "../(constants)/constants";
-
-type SecuritySettingsProps = {
-  lastLoginAt: string;
-};
+import { getSecuritySummary, logoutAllSessions } from "@/lib/api/security";
+import { clearToken } from "@/lib/utils/token";
+import { useAppDispatch } from "@/lib/store/hooks";
+import { clearUser } from "@/lib/store/features/userSlice";
+import { LOGGED_OUT_EVERYWHERE_REASON } from "@/app/component/SessionGuard";
+import { formatRelativeTime } from "@/lib/utils/date";
 
 const outlinedButtonSx = { textTransform: "none", borderRadius: 2 } as const;
 
-const primaryButtonSx = {
-  textTransform: "none",
-  borderRadius: 2,
-  fontWeight: 700,
-  background: "linear-gradient(90deg, #2f90c5 0%, #3bb8a4 100%)",
-  "&:hover": {
-    background: "linear-gradient(90deg, #287ca8 0%, #32a18f 100%)",
-  },
-} as const;
+export default function SecuritySettings() {
+  const router = useRouter();
+  const dispatch = useAppDispatch();
+  const queryClient = useQueryClient();
 
-export default function SecuritySettings({
-  lastLoginAt,
-}: Readonly<SecuritySettingsProps>) {
+  const [lastLoginAt, setLastLoginAt] = useState<string | null>(null);
+  const [passwordChangedAt, setPasswordChangedAt] = useState<string | null>(null);
+
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
-  const [isTwoFactorEnabled, setIsTwoFactorEnabled] = useState(false);
+  const [isSessionsModalOpen, setIsSessionsModalOpen] = useState(false);
   const [isLogoutAllConfirmOpen, setIsLogoutAllConfirmOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [isToastOpen, setIsToastOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getSecuritySummary()
+      .then((summary) => {
+        if (cancelled) return;
+        setLastLoginAt(summary.lastLoginAt);
+        setPasswordChangedAt(summary.passwordChangedAt);
+      })
+      .catch((error) => {
+        console.error("Failed to load security summary:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const showToast = (message: string) => {
     setToastMessage(message);
     setIsToastOpen(true);
   };
 
-  const handleToggleTwoFactor = () => {
-    setIsTwoFactorEnabled((current) => {
-      const next = !current;
-      showToast(
-        next
-          ? "Two-factor authentication enabled."
-          : "Two-factor authentication disabled.",
-      );
-      return next;
-    });
+  // Shared by "Log Out of All Sessions" and revoking the session you're currently using
+  // from the Active Sessions list - both end this session the same way.
+  const endSessionAndRedirectToLogin = () => {
+    clearToken();
+    dispatch(clearUser());
+    queryClient.clear();
+    router.push(`/login?reason=${LOGGED_OUT_EVERYWHERE_REASON}`);
+  };
+
+  const handlePasswordChanged = () => {
+    setPasswordChangedAt(new Date().toISOString());
+    showToast("Password updated. Other devices were signed out.");
   };
 
   return (
@@ -58,7 +78,11 @@ export default function SecuritySettings({
       >
         <SettingRow
           label="Password"
-          description="••••••••••••"
+          description={
+            passwordChangedAt
+              ? `••••••••••••  ·  Last changed ${formatRelativeTime(passwordChangedAt)}`
+              : "••••••••••••"
+          }
           control={
             <Button
               variant="outlined"
@@ -72,49 +96,21 @@ export default function SecuritySettings({
       </SettingsSection>
 
       <SettingsSection
-        title="Two-Factor Authentication"
-        description="Add an extra layer of security to your account."
-      >
-        <SettingRow
-          label="Status"
-          description={
-            <Chip
-              size="small"
-              label={isTwoFactorEnabled ? "Enabled" : "Not Enabled"}
-              sx={{
-                mt: 0.4,
-                fontWeight: 600,
-                color: isTwoFactorEnabled ? "#1c8758" : "#b36a00",
-                bgcolor: isTwoFactorEnabled ? "#e8f7ef" : "#fff3e3",
-              }}
-            />
-          }
-          control={
-            <Button
-              variant={isTwoFactorEnabled ? "outlined" : "contained"}
-              onClick={handleToggleTwoFactor}
-              sx={isTwoFactorEnabled ? outlinedButtonSx : primaryButtonSx}
-            >
-              {isTwoFactorEnabled ? "Disable" : "Enable"}
-            </Button>
-          }
-        />
-      </SettingsSection>
-
-      <SettingsSection
         title="Active Sessions"
         description="Manage devices currently signed in to your account."
       >
         <Stack divider={<Divider />} spacing={0}>
           <SettingRow
             label="Last Login"
-            description={formatLastLogin(lastLoginAt)}
+            description={
+              lastLoginAt
+                ? formatLastLogin(lastLoginAt)
+                : "No previous login recorded"
+            }
             control={
               <Button
                 variant="outlined"
-                onClick={() =>
-                  showToast("Session list is a UI-only preview for now.")
-                }
+                onClick={() => setIsSessionsModalOpen(true)}
                 sx={outlinedButtonSx}
               >
                 View Sessions
@@ -141,21 +137,34 @@ export default function SecuritySettings({
       <ChangePasswordModal
         open={isPasswordModalOpen}
         onClose={() => setIsPasswordModalOpen(false)}
+        onSuccess={() => {
+          setIsPasswordModalOpen(false);
+          handlePasswordChanged();
+        }}
+      />
+
+      <ActiveSessionsModal
+        open={isSessionsModalOpen}
+        onClose={() => setIsSessionsModalOpen(false)}
+        onCurrentSessionRevoked={endSessionAndRedirectToLogin}
       />
 
       <ConfirmationModal
         open={isLogoutAllConfirmOpen}
         title="Log out of all sessions?"
-        description="You'll be signed out on every device where you're currently logged in."
+        description="You'll be signed out on every device where you're currently logged in, including this one."
         confirmLabel="Log Out Everywhere"
         confirmTone="danger"
-        onConfirm={() => showToast("Signed out of all sessions. (UI-only demo.)")}
+        onConfirm={async () => {
+          await logoutAllSessions();
+          endSessionAndRedirectToLogin();
+        }}
         onClose={() => setIsLogoutAllConfirmOpen(false)}
       />
 
       <Snackbar
         open={isToastOpen}
-        autoHideDuration={3000}
+        autoHideDuration={4200}
         onClose={() => setIsToastOpen(false)}
         anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
       >

@@ -28,7 +28,10 @@ import { login } from "@/lib/api/auth";
 import { setToken } from "@/lib/utils/token";
 import { useAppDispatch } from "@/lib/store/hooks";
 import { setUser } from "@/lib/store/features/userSlice";
-import { SESSION_EXPIRED_REASON } from "@/app/component/SessionGuard";
+import {
+  LOGGED_OUT_EVERYWHERE_REASON,
+  SESSION_EXPIRED_REASON,
+} from "@/app/component/SessionGuard";
 import { PASSWORD_SET_LOGIN_FLAG } from "@/constant/password-setup";
 
 function LoginNotice() {
@@ -43,7 +46,17 @@ function LoginNotice() {
     );
   }
 
-  if (searchParams.get("reason") !== SESSION_EXPIRED_REASON) {
+  const reason = searchParams.get("reason");
+
+  if (reason === LOGGED_OUT_EVERYWHERE_REASON) {
+    return (
+      <Alert severity="info" sx={{ mb: 2.5 }}>
+        You&apos;ve been signed out of all sessions. Please sign in again.
+      </Alert>
+    );
+  }
+
+  if (reason !== SESSION_EXPIRED_REASON) {
     return null;
   }
 

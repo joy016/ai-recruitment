@@ -8,7 +8,7 @@ import SecuritySettings from "./(components)/SecuritySettings";
 import NotificationSettings from "./(components)/NotificationSettings";
 import PreferenceSettings from "./(components)/PreferenceSettings";
 import PermissionSettings from "./(components)/PermissionSettings";
-import { MOCK_LAST_LOGIN, MOCK_USER_PROFILE } from "./(constants)/constants";
+import { MOCK_USER_PROFILE } from "./(constants)/constants";
 import { SettingsSectionKey, UserProfile } from "./(types)/settings.types";
 
 export default function SettingsPage() {
@@ -21,7 +21,7 @@ export default function SettingsPage() {
       case "profile":
         return <ProfileSettings profile={profile} onSave={setProfile} />;
       case "security":
-        return <SecuritySettings lastLoginAt={MOCK_LAST_LOGIN} />;
+        return <SecuritySettings />;
       case "notifications":
         return <NotificationSettings />;
       case "preferences":
