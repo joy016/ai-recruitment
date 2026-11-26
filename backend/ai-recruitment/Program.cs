@@ -5,6 +5,7 @@ using ai_recruitment.Features.Candidates.Realtime;
 using ai_recruitment.Features.Candidates.Services;
 using ai_recruitment.Features.Dashboard.Services;
 using ai_recruitment.Features.Inbox.Services;
+using ai_recruitment.Features.JobPosts.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Services;
 using ai_recruitment.Features.Roles;
@@ -217,6 +218,7 @@ builder.Services.AddHttpClient<IN8nCandidateStatusWebhookService, N8nCandidateSt
     var options = provider.GetRequiredService<IOptions<N8nCandidateStatusOptions>>().Value;
     client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
 });
+builder.Services.AddHttpClient<IApplicationEmailService, ApplicantEmailService>();
 
 builder.Services.AddSingleton<CandidateStatusOutboxChannel>();
 builder.Services.AddScoped<ICandidateStatusWebhookPublisher, CandidateStatusWebhookPublisher>();

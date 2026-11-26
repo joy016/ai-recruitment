@@ -2,8 +2,10 @@
 using ai_recruitment.Features.Authorization;
 using ai_recruitment.Features.JobPosts.Dto;
 using ai_recruitment.Features.JobPosts.Model;
+using ai_recruitment.Features.JobPosts.Services;
 using ai_recruitment.Features.Notifications;
 using ai_recruitment.Features.Notifications.Model;
+using Anthropic.Models.Messages;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,13 +26,17 @@ namespace ai_recruitment.Features.JobPosts.Controller
 
         private readonly AppDbContext _context;
         private readonly INotificationService _notificationService;
+        private IApplicationEmailService _applicationEmailService;
 
 
-        public JobController(AppDbContext context, INotificationService notificationService)
+        public JobController(AppDbContext context, INotificationService notificationService, IApplicationEmailService applicationEmailService)
         {
             _context = context;
             _notificationService = notificationService;
+            _applicationEmailService = applicationEmailService;
         }
+
+      
 
         [HttpPost("insertJob")]
         [HasPermission(PermissionNames.JobPosts.Create)]
@@ -291,6 +297,23 @@ namespace ai_recruitment.Features.JobPosts.Controller
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        [HttpPost("SendApplicationForm")]
+        public async Task<IActionResult> SendApplicationForm([FromBody]ApplicationFormPayload applicationFormDto)
+        {
+            var result = await _applicationEmailService.SendApplicationLinkAsync(applicationFormDto);
+            if (!result)
+            {
+                return BadRequest("Failed to send application email.");
+            }
+
+            return Ok(new
+            {
+                StatusCode = 200,
+                statusMessage = "Application form sent successfully"
+            });
+
         }
 
     }
