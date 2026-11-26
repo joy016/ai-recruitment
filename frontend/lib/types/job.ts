@@ -54,3 +54,10 @@ export interface EditJobPayload {
   techSkills: string[];
   department: string;
 }
+
+export interface SendJobApplicationPayload {
+  applicationForm: string;
+  applicantsEmailAddress: string;
+  jobTitle: string;
+  recruiterName: string;
+}

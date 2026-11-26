@@ -10,6 +10,7 @@ import {
   InsertJobResponse,
   GetAllJobsResponse,
   EditJobPayload,
+  SendJobApplicationPayload,
 } from "../types/job";
 
 const JOB_ENDPOINT = `${BackendServer}/api/Job`;
@@ -53,5 +54,13 @@ export const editJob = async (
 ): Promise<AxiosResponse<void>> => {
   return withNotificationRefresh(
     apiClient.put<void>(`${JOB_ENDPOINT}/editJob/${jobId}`, payload),
+  );
+};
+
+export const sendApplicationForm = async (
+  payload: SendJobApplicationPayload,
+): Promise<AxiosResponse<void>> => {
+  return withNotificationRefresh(
+    apiClient.post<void>(`${JOB_ENDPOINT}/SendApplicationForm`, payload),
   );
 };

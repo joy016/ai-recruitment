@@ -23,8 +23,14 @@ import {
   Typography,
 } from "@mui/material";
 import { Check, MoreHoriz } from "@mui/icons-material";
-import { getAllJobs, getJobDetails, updateJobStatus } from "@/lib/api/job";
+import {
+  getAllJobs,
+  getJobDetails,
+  sendApplicationForm,
+  updateJobStatus,
+} from "@/lib/api/job";
 import { usePermissions } from "@/lib/hooks/usePermissions";
+import { useAppSelector } from "@/lib/store/hooks";
 import { PERMISSIONS } from "@/constant/permissions";
 import { JobDetailsResponse, JobItem } from "@/lib/types/job";
 import JobModalForm, {
@@ -113,8 +119,11 @@ const formatPostedDate = (value: string) => {
 
 export default function JobsPage() {
   const { hasPermission } = usePermissions();
+  const currentUser = useAppSelector((state) => state.user.currentUser);
+  const recruiterName = [currentUser?.firstName, currentUser?.lastName]
+    .filter(Boolean)
+    .join(" ");
   const canCreateJob = hasPermission(PERMISSIONS.jobPosts.create);
-  // Editing details and changing a job's status both need jobposts.edit.
   const canEditJob = hasPermission(PERMISSIONS.jobPosts.edit);
   const canViewApplicants = hasPermission(PERMISSIONS.candidates.view);
   const [jobPosts, setJobPosts] = useState<JobItem[]>([]);
@@ -274,18 +283,27 @@ export default function JobsPage() {
     setToastOpen(true);
   };
 
-  const handleSendEmail = () => {
-    if (!fullApplicationLink || !recipientEmail.trim() || !applicationFormJob) {
+  const handleSendEmail = async () => {
+    const applicantEmail = recipientEmail.trim();
+    if (!fullApplicationLink || !applicantEmail || !applicationFormJob) {
       return;
     }
 
-    const subject = encodeURIComponent(
-      `${applicationFormJob.jobTitle} - Application Form`,
-    );
-    const body = encodeURIComponent(
-      `Hi,\n\nPlease complete your application form using this link:\n${fullApplicationLink}\n\nKind regards,\nHR Team`,
-    );
-    window.location.href = `mailto:${recipientEmail}?subject=${subject}&body=${body}`;
+    try {
+      await sendApplicationForm({
+        applicationForm: fullApplicationLink,
+        applicantsEmailAddress: applicantEmail,
+        jobTitle: applicationFormJob.jobTitle,
+        recruiterName,
+      });
+      setToastMessage("Application form successfully sent.");
+      setApplicationFormJob(null);
+    } catch (error) {
+      console.error("Failed to send application form:", error);
+      setToastMessage("Failed to send the application form. Please try again.");
+    }
+
+    setToastOpen(true);
   };
 
   const handleCopyLink = async () => {
